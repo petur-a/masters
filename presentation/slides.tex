@@ -1,0 +1,929 @@
+\documentclass{beamer}
+
+\usepackage{xspace}
+\usepackage{stmaryrd}
+\usepackage{amsmath}
+\usepackage{lstrfun}
+
+\def\rfunc{\ensuremath{\mathsf{CoreFun}}\xspace}
+\def\rfun{\ensuremath{\mathsf{RFun}}\xspace}
+
+\lstset{language=RFun}
+
+% Environments
+\newcommand{\cod}{\text{cod}}
+\newcommand{\dom}{\text{dom}}
+\newcommand{\Hom}{\text{Hom}}
+
+\newcommand{\leaves}{\text{leaves}}
+\newcommand{\sfmp}{\text{staticFMP}}
+\newcommand{\PLVal}{\text{PLVal}}
+
+\def\vdashe{\vdash}
+\def\vdashd{\vdash\!\!\!\vdash}
+\newcommand{\con}{\Sigma;\Gamma\vdash}
+\newcommand{\conp}{\Sigma;\Gamma'\vdash}
+\newcommand{\conpp}{\Sigma;\Gamma''\vdash}
+\newcommand{\conemp}{\Sigma;\emptyset\vdash}
+\newcommand{\concup}{\Sigma;\Gamma\cup\Gamma'\vdash}
+\newcommand{\concupp}{\Sigma;\Gamma\cup\Gamma''\vdash}
+\newcommand{\pcon}{p \vdash}
+\newcommand{\storeinv}{p;\sigma\vdash^{-1}}
+\newcommand{\emptyinv}{p;\emptyset\vdash^{-1}}
+
+\newcommand{\dcon}{\Delta\vdash}
+
+% Constructs
+\newcommand{\inl}[1]{\textbf{inl}(#1)}
+\newcommand{\inr}[1]{\textbf{inr}(#1)}
+
+\newcommand{\lett}[3]{\textbf{let } #1 = #2 \textbf{ in } #3}
+\newcommand{\caseof}[5]{\textbf{case } #1 \textbf{ of } #2 \Rightarrow #3, #4 \Rightarrow #5}
+\newcommand{\caseofu}[5]{\textbf{case } #1 \textbf{ of } #2 \Rightarrow #3, #4 \Rightarrow #5 \textbf{ unsafe }}
+\newcommand{\caseofs}[6]{\textbf{case } #1 \textbf{ of } #2 \Rightarrow #3, #4 \Rightarrow #5 \textbf{ safe } #6}
+\newcommand{\smpcase}[2]{\textbf{case } #1 \textbf{ of } #2}
+
+\newcommand{\roll}[2]{\textbf{roll } [#1]\ #2}
+\newcommand{\unroll}[2]{\textbf{unroll } [#1]\ #2}
+
+\newcommand{\abort}[2]{\textbf{abort}_#1\ #2}
+
+\newcommand{\class}[2]{\textbf{class } #1 \textbf{ where } #2}
+\newcommand{\instance}[2]{\textbf{instance } #1 \textbf{ where } #2}
+
+\newcommand{\within}[2]{\textbf{within } #1 : #2 \textbf{ end}}
+
+\newcommand{\defeq}{\stackrel{\>\text{def}}{=}\>}
+
+\definecolor{kugreen}{RGB}{50,93,61}
+\definecolor{kugreenlys}{RGB}{132,158,139}
+\definecolor{kugreenlyslys}{RGB}{173,190,177}
+\definecolor{kugreenlyslyslys}{RGB}{214,223,216}
+
+\usetheme[width=2cm]{PaloAlto}
+
+\setbeamercovered{transparent}
+\setbeamertemplate{blocks}[rounded][shadow=true]
+
+%gets rid of bottom navigation symbols
+\setbeamertemplate{navigation symbols}{}
+
+\usecolortheme[named=kugreen]{structure}
+\useinnertheme{circles}
+\usefonttheme[onlymath]{serif}
+
+% \logo{\includegraphics[width=1.5cm]{billeder/logo}}
+
+\title{Design of a Reversible Functional Language}
+\subtitle{And Its Type System}
+\author{Petur Andrias Højgaard Jacobsen}
+\institute
+{
+  Institute of Computer Science \\
+  University of Copenhagen
+}
+\date{\today}
+\subject{Computer Science}
+
+\begin{document}
+
+\frame{\titlepage}
+
+\frame{\frametitle{Table of Contents}
+
+  \begin{enumerate}
+
+    \item Introduction.
+
+    \item Presenting the \rfunc language.
+
+    \item How do we run backwards?
+
+    \item Syntactic sugar.
+
+  \end{enumerate}
+
+}
+
+\section{Introduction}
+
+\frame{\frametitle{Introduction}
+
+  \begin{itemize}
+
+    \item Reversible computing is the study of computational models in which
+      individual computation steps can be uniquely and unambiguously inverted.
+
+    \item Originally studied for energy conservation, we wish to use it as an
+      property of programming.
+
+    \item Reversible languages include Janus, Pi, Theseus and RFun.
+
+    \item We present a reversible functional programming language \rfunc,
+      inspired by \rfun.
+
+  \end{itemize}
+
+}
+
+\frame{\frametitle{Why is a Type System Useful?}
+
+  \begin{itemize}
+
+    \item Well-typed programs cannot go wrong.
+
+    \item Proper resource usage.
+
+    \item Introduction of static information.
+
+    \item Other?
+
+  \end{itemize}
+
+}
+
+\section{Language}
+
+\frame{\frametitle{\rfunc Introduction}
+
+  \rfunc features:
+
+  \begin{itemize}
+
+    \item A relevant type system.
+
+    \item Ancillae parameters.
+
+    \item Rank-1 parametric polymorphism.
+
+    \item Recursive types through iso-recursive treatment.
+
+  \end{itemize}
+
+}
+
+\frame{\frametitle{\rfunc Grammar}
+
+\small
+
+\begin{figure}[t]
+\begin{tabular}{p{1\textwidth}}
+$q ::= d^*$ \\
+$d ::= f\ \alpha^*~v^+ = e$ \\
+$e ::= x$ \\
+$\hspace{1.9em}\mid ()$ \\
+$\hspace{1.9em}\mid \inl{e}$ \\
+$\hspace{1.9em}\mid \inr{e}$ \\
+$\hspace{1.9em}\mid (e, e)$ \\
+$\hspace{1.9em}\mid \lett{l}{e}{e}$ \\
+$\hspace{1.9em}\mid \caseof{e}{\inl{x}}{e}{\inr{y}}{e}$ \\
+$\hspace{1.9em}\mid f~\alpha^*~e^+$ \\
+$\hspace{1.9em}\mid \roll{\tau}{e}$ \\
+$\hspace{1.9em}\mid \unroll{\tau}{e}$ \\
+$l ::= x$ \\
+$\hspace{1.9em}\mid (x, x)$ \\
+$v ::= x:\tau_a$ \\
+\end{tabular}
+\end{figure}
+
+}
+
+\begin{frame}[fragile]\frametitle{Example Program: Map}
+
+  Below is a rather standard \texttt{map} function. Note the explicit
+  \textbf{roll} and \textbf{unroll} terms.
+
+  \begin{rfuncode}
+map $\alpha$ $\beta$ ($f: \alpha \leftrightarrow \beta$) ($xs: \mu X . 1 + \alpha \times X$) =
+  case unroll [$\mu X . 1 + \alpha \times X$] of
+    inl(()) => roll [$\mu X . 1 + \beta \times X$] inl(()),
+    inr($xs'$) => let ($x, xs''$) = $xs'$
+             in let $x'$ = $f$ $x$
+             in let $xs'''$ = map $\alpha$ $\beta$ $f$ $xs''$
+             in roll [$\mu X . 1 + \beta \times X$] inr(($x', x'''$))
+  \end{rfuncode}
+
+\end{frame}
+
+\frame{\frametitle{\rfunc Typing Terms}
+
+  Typing terms. $\tau_f$ are function types, $\tau$ are primitive types and
+  $\tau_a$ are ancilla types.
+
+  \vskip -2\abovedisplayskip
+  \begin{figure}[t]
+  \begin{align*}
+    \tau_f & ::= \tau_f \rightarrow \tau'_f
+          \mid \tau \rightarrow \tau'_f
+          \mid \tau \leftrightarrow \tau' \mid \forall X. \tau_f \\
+    \tau & ::=
+    1 \mid \tau \times \tau' \mid \tau + \tau' \mid X \mid
+             \mu X.\tau \\
+    \tau_a & ::= \tau \mid \tau \leftrightarrow \tau'
+  \end{align*}
+  \end{figure}
+
+  Typing judgement
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    \con e : \tau
+  \end{align*}
+
+}
+
+\frame{\frametitle{Ensuring Relevance}
+
+\small
+
+  Two rule for variables, depending on which context they appear in.
+
+  \begin{align*}
+    \textsc{T-Var1: }
+      \dfrac
+        {}
+        {\conemp x : \tau} \Sigma(x) = \tau &&
+    \textsc{T-Var2: }
+      \dfrac
+        {}
+        {\Sigma; (x \mapsto \tau) \vdashe x : \tau}
+  \end{align*}
+
+  Unit requires an empty context. We can always perform Unit elimination.
+
+  \begin{align*}
+    \textsc{T-Unit: }
+      \dfrac
+        {}
+        {\conemp () : 1}
+  \end{align*}
+
+  \begin{align*}
+    \textsc{T-Unit-Elm: }
+      \dfrac
+        {\begin{array}{ccc}
+         \con e : 1 & \quad &
+         \conp e' : \tau
+         \end{array}}
+        {\concup e' : \tau}
+  \end{align*}
+
+}
+
+\frame{\frametitle{Ensuring Relevance}
+
+\small
+
+Introduce non-deterministic union of hypotheses when a rule has multiple
+premises.
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    \textsc{T-Prod: }
+      \dfrac
+        {\begin{array}{ccc}
+         \con e_1 : \tau & \quad &
+         \conp e_2 : \tau'
+         \end{array}}
+        {\concup (e_1, e_2) : \tau \times \tau'}
+  \end{align*}
+
+Allows contraction and exchange. A concrete example:
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    \dfrac
+      {\begin{array}{ccc}
+          \overset{\vdots}{\emptyset; x \mapsto \tau_x, y \mapsto \tau_y \vdashe \dots} &
+          \quad &
+          \overset{\vdots}{\emptyset; y \mapsto \tau_y, z \mapsto \tau_z \vdashe \dots}
+       \end{array}}
+      {\emptyset; x \mapsto \tau_x, y \mapsto \tau_y, z \mapsto \tau_z \vdashe \dots}
+  \end{align*}
+
+}
+
+\frame{\frametitle{Ensuring Ancillae Are Static}
+
+  We observe that hypotheses can be put into the static context when no dynamic
+  information went into constructing them.
+
+\begin{align*}
+  \textsc{T-Let1St: }
+    \dfrac
+      {\begin{array}{ccc}
+       \Sigma; \emptyset \vdash e_1 : \tau' & \quad &
+       \Sigma, x : \tau' ; \Gamma, \vdashe e_2 : \tau
+       \end{array}}
+      {\con \lett{x}{e_1}{e_2} : \tau}
+\end{align*}
+
+  Alternatively, We could have gone with restricted weakening.
+
+\begin{align*}
+  \textsc{T-Weakening: }
+    \dfrac
+      {\Sigma, x \mapsto \tau; \Gamma \vdash e : \tau'}
+      {\Sigma, x \mapsto \tau; \Gamma, x \mapsto \tau \vdash e : \tau'}
+\end{align*}
+
+}
+
+\frame{\frametitle{Evaluation}
+
+  Big step call-by-value semantic with substitution to map values to variables.
+  Evaluation judgement
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    \pcon e \downarrow c
+  \end{align*}
+
+  The difficult part of ensuring reversibility is ensuring determinism of
+  branching. \vspace{0.5em}
+
+  We employ a \emph{First Match Policy}. It can be seen in the \textsc{E-CaseR}
+  rule. \vspace{0.5em}
+
+  Now, we define \emph{leaf expressions}, \emph{possible leaf values} and
+  \emph{leaves}.
+
+}
+
+\frame{\frametitle{Leaf Expressions, Possible Leaf Values and Leaves}
+
+  Leaf expressions are a subset of expression which may be regarded as the
+  final expression. \vspace{0.5em}
+
+  We collect the set of leaves of an expression:
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    \leaves (\caseof{z}{\inl{x}}{x}{\inr{y}}{y}) = \{ x, y \}
+  \end{align*}
+
+  A unification of two expressions states if the expressions relate to one
+  another. An example:
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    () \rhd ()
+  \end{align*}
+
+  The set of possible leaf values is then defined as:
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    \PLVal(e) = \{ e' \in \text{LExpr} \mid e'' \in \leaves(e), e' \rhd e'' \}
+  \end{align*}
+
+}
+
+\frame{\frametitle{Backwards Determinism}
+
+  \begin{theorem}[Contextual Backwards Determinism]
+
+    For all open expressions $e$ with free variables $x_1, \dots, x_n$, and all
+    canonical forms $v_1, \dots, v_n$ and $w_1, \dots, w_n$, if $\pcon e[v_1 /
+    x_1, \dots, v_n / x_n] \downarrow c$ and $\pcon e[w_1 / x_1, \dots, w_n /
+    x_n] \downarrow c$ then $v_i = w_i$  for all $1 \le i \le n$.
+
+  \end{theorem}
+
+  \vspace{1em}
+  Normally expressed directly by the reduction relation, as in RFun. Too
+  restrictive in \rfunc ($e \downarrow c$ and $e' \downarrow c \Leftrightarrow e
+  = e'$ is only true in trivial languages).
+
+}
+
+\section{First Match Policy}
+
+\begin{frame}[fragile]\frametitle{First Match Policy Cons}
+
+  Unfortunately, reversibility cannot be fully determined by the type system.
+  \vspace{0.5em}
+
+  The First Match Policy is potentially inefficient! See the following plus
+  function:
+
+  \begin{rfuncode}
+    plus $(n_1: \mu X . 1 + X)$ ($n_2: \mu X . 1 + X$) =
+      case unroll [$\mu X . 1 + X$] $n_1$ of
+        inl(()) => $n_2$,
+        inr($n_1'$) => let $n_2'$ = plus $n_1'$ $n_2$
+                   in roll [$\mu X . 1 + X$] inr($n_2'$)
+  \end{rfuncode}
+
+\end{frame}
+
+\frame{\frametitle{Alternative Measures: Exit Assertion}
+
+  We will add two things: Exit assertions and static guarantees. \vspace{0.5em}
+
+  An exit assertion is appended to a case-expression and must evaluate to a
+  Boolean value.
+
+  \begin{itemize}
+
+    \item Janus if-statement:
+
+    \vskip -1.5\abovedisplayskip
+    \begin{align*}
+      \textbf{if } e \textbf{ then } s_1 \textbf{ else } s_2 \textbf{ fi } e_a
+    \end{align*}
+
+    \item \rfunc case-expression with exit assertion:
+
+    \vskip -1.5\abovedisplayskip
+    \begin{align*}
+      \caseofs{e}{\inl{x}}{e_2}{\inr{y}}{e_3}{e_a}
+    \end{align*}
+
+  \end{itemize}
+
+}
+
+\frame{\frametitle{Alternative Measures: Static Guarantee}
+
+\small
+
+  Two methods to identify a static guarantee:
+
+  \begin{itemize}
+
+    \item ``Traditional'' analysis looks at the open form of the branch arms to
+      observe syntactic difference
+
+      \vskip -1.5\abovedisplayskip
+      \begin{align*}
+        \{ (l_2, l_3) \mid l_2 \in \leaves(e_2)
+                         , l_3 \in \leaves(e_3)
+                         , l_2 \rhd l_3 \}
+        = \emptyset
+      \end{align*}
+
+     \item Exhaustive method looks at the domain of a function to see if any
+       leaves sets have overlap.
+
+      \vskip -1.5\abovedisplayskip
+      \begin{align*}
+        \leaves_l = \bigcup_{\substack{(c_1, \dots, c_n) \\ \in \dom{(f)}}} \leaves(e_2') \\
+        \leaves_r = \bigcup_{\substack{(c_1, \dots, c_n) \\ \in \dom{(f)}}} \leaves(e_3')
+      \end{align*}
+
+      \vskip -1.5\abovedisplayskip
+      \begin{align*}
+        \{ (l_2, l_3) \mid l_2 \in \leaves_l
+                         , l_3 \in \leaves_r
+                         , l_2 \rhd l_3 \}
+        = \emptyset
+      \end{align*}
+
+  \end{itemize}
+
+}
+
+\section{Going Backwards}
+
+\frame{\frametitle{Running Backwards}
+
+  The inverse of any function can be determined by trying all possible outputs,
+  known as the Generate-And-Test method. \vspace{0.5em}
+
+  We want it to be efficient though: Meaning, as efficient as forward
+  interpretation.
+
+}
+
+\frame{\frametitle{Program Inversion}
+
+  A program inverter literally writes the inverse program from the forward
+  program. This program can then be evaluated as normal.
+
+  \vskip -2\abovedisplayskip
+  \begin{align*}
+    \mathcal{I}_e \llbracket e \rrbracket = e'
+  \end{align*}
+
+  It is presented as a set of local inverters, one for each syntactic domain.
+  For \rfunc we could define $\mathcal{I}_e, \mathcal{I}_f, \mathcal{I}_p$.
+  \vspace{0.5em}
+
+  This is easy for flow-chart languages like Janus, as constructs are
+  symmetrical and have clear inverses. \vspace{0.5em}
+
+  Not so easy for reversible functional languages.
+
+}
+
+\frame{\frametitle{Inverse Semantics}
+
+  We will instead use inverse interpretation. \vspace{0.5em}
+
+  Relationship between a function $f$ and its inverse:
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    f~a_1 \dots a_n~x = y
+    \Longleftrightarrow f^{-1}~a_1 \dots a_n~y = x
+  \end{align*}
+
+  Cannot describe mapping of variables to values with substitution. We instead
+  ``predict'' the value of each variable in the forward direction. Inverse
+  semantics judgement
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    p; \sigma \vdash^{-1} e, c \leadsto \sigma'
+  \end{align*}
+
+}
+
+\frame{\frametitle{Inverse Semantics Correctness}
+
+  The derivation of the forward semantics and the backwards semantics are
+  captured by the following lemma:
+
+\begin{lemma}
+
+  If $\pcon e[c / x] \downarrow c'$ (by $\mathcal{E}$) where $x$ is the only
+  free variable in $e$, then $p; \emptyset \vdash^{-1} e, c' \leadsto \{x
+  \mapsto c\}$ (by $\mathcal{I}$).
+
+\end{lemma}
+
+  We use it directly to argue the correctness of the inverse semantics:
+
+\begin{theorem}[Correctness of Inverse Semantics]
+
+  If $p \vdash f~c_1 \dots c_n \downarrow c$ with $p(f) = \alpha_1 \dots
+  \alpha_m~x_1 \dots x_n = e$, then $\sigma(x_n) = c_n$ where $\emptyinv e[c_1
+  / x_1, \dots, c_{n-1} / x_{n-1}], c \leadsto \sigma$.
+
+\end{theorem}
+
+}
+
+\frame{\frametitle{Inverse Semantics Expressiveness}
+
+  A program inverter is less expressive than the presented inverse semantics.
+  Consider inverting:
+
+\begin{align*}
+  \mathcal{I}_f \llbracket f~(x:\tau) = (x, x) \rrbracket &\defeq
+  f^{-1}~(x': \tau \times \tau) = \mathcal{I}_e \llbracket x' \rrbracket \\
+  \mathcal{I}_e \llbracket x' \rrbracket &\defeq \lett{(x, y)}{x'}{x}
+\end{align*}
+
+  We cannot implicitly assume that $x = y$, so program is not well-typed. But
+  we can run backwards by the inverse semantics.
+
+}
+
+\section{Transformations}
+
+\frame{\frametitle{Transformations Background}
+
+  \rfunc is as simple as possible. Our next motivation is to lift it into a
+  higher-level language to make programming easier. \vspace{0.5em}
+
+  Transformations should have clearly defined translations of expressions from
+  a high-level syntax to the core syntax.
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    e \defeq e'
+  \end{align*}
+
+  Where $e$ is an expression in the light language and $e'$ is an expression in
+  the core language.
+
+}
+
+\frame{\frametitle{Variants}
+
+\small
+
+  Allows us to define new algebraic data types.
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    \beta~\alpha^* = \texttt{v}_1~[\tau\alpha]^* \mid \dots \mid \texttt{v}_n~[\tau\alpha]^*
+  \end{align*}
+
+  The translation strips all data type definitions and substitutes directly
+  into each expression. \vspace{0.5em}
+
+  Translations of case-expressions over variants unroll the variant.
+
+}
+
+\begin{frame}[fragile]\frametitle{Variant Translation Example}
+
+  Light Program containing a variant:
+
+    \begin{rfuncode}
+Choice = Rock | Paper | Scissors
+
+rpsAI ($c$:Choice) =
+  case $c$ of
+    Rock => Paper
+    Paper => Scissors
+    Scissors => Rock
+    \end{rfuncode}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Variant Translation Example}
+
+  Translated core program:
+
+  \begin{rfuncode}
+rpsAI ($c$:1 + (1 + 1)) =
+  case $c$ of
+    inl(()) => inr(inl(()))
+    inr($w$) => case $w$ of
+      inl(()) => inr(inr(()))
+      inr(()) => inl(())
+  \end{rfuncode}
+
+\end{frame}
+
+\frame{\frametitle{Type Classes}
+
+  Type classes are famous from Haskell. They solve overloading of operations.
+  A type class definition:
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    \textbf{class } \kappa~\alpha \textbf{ where } [f \Rightarrow \tau_f]^+
+  \end{align*}
+
+  Functions which use some type class operator have their signature restricted:
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    f~\kappa~\alpha \Rightarrow \alpha~.~(x_1:\tau_1) \dots (x_n:\tau_n) = e
+  \end{align*}
+
+  The translation erases all type class definitions and generates new top-level
+  functions. \vspace{0.5em}
+
+  And the correct top-level functions is applied instead of the generic
+  function.
+
+}
+
+\frame{\frametitle{Type Classes}
+
+  Can be used to define a duplication/equality operator (with variants):
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    \texttt{Eq}~\alpha = \texttt{Eq} \mid \texttt{Neq}~\alpha
+  \end{align*}
+
+}
+
+\begin{frame}[fragile]\frametitle{Type Class Translation Example}
+
+  Light Program containing a type class:
+
+    \begin{rfuncode}
+class Default a where
+  def => 1 <-> a
+
+instance Default ($\mu X . 1 + X$) where
+  def $u$ => inl(())
+
+defPair : Default $\alpha$, Default $\beta$ => $\alpha$ $\beta$ . 1
+defPair $u$ = (def $\alpha$ $u$, def $\beta$ $u$)
+    \end{rfuncode}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Type Class Translation Example}
+
+  Translated core program:
+
+  \begin{rfuncode}
+defNat : 1
+defNat $u$ = inl(())
+
+defPairNatNat : 1
+defPairNatNat $u$ = (defNat $u$, defNat $u$)
+  \end{rfuncode}
+
+\end{frame}
+
+\frame{\frametitle{Top-level Cases}
+
+  Functions oftentimes start with looking at the form of the input. We
+  introduce a shorthand for this phenomenon.
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    &\texttt{map $f$ []} = \texttt{[]} \\
+    &\texttt{map $f$ $(x:xs)$} = \texttt{$f~x:$ map $f$ $xs$}
+  \end{align*}
+
+  Only allow top-level sum types and variant types. The coverage must be
+  \emph{total}. \vspace{0.5em}
+
+  Requires constructing a tree, as we allow it for multiple parameters at the
+  time.
+
+}
+
+\begin{frame}[fragile]\frametitle{Top-level Case Translation Example}
+
+  Light Program containing a top level clause and a list variant:
+
+    \begin{rfuncode}
+map :: $\alpha~\beta~.~(\alpha \leftrightarrow \beta) \rightarrow \texttt{List } \alpha$
+map $f$ inl(()) = roll [List $\beta$] Nil
+map $f$ inr($(x, xs')$) = let $x' = f~\alpha~\beta~x$
+                   in let $xs''$ = map $\alpha~\beta~f~xs'$
+                   in roll [List $\beta$] (Cons $x'$ $xs''$)
+    \end{rfuncode}
+
+\end{frame}
+
+\frame{\frametitle{Guards}
+
+  Guards are built on top of top-level clauses and require a predicate to hold
+  on top of the form of the pattern expressions. \vspace{0.5em}
+
+  We require guards to be \emph{total}. One clause should be guarded by an
+  \textbf{otherwise}. \vspace{0.5em}
+
+  They are easily translated into a chain of boolean checks, one for each
+  guard, in order of definition.
+
+}
+
+\begin{frame}[fragile]\frametitle{Guard Translation Example}
+
+  Light Program containing guards.
+
+    \begin{rfuncode}
+tryPred :: $\mu X . 1 + X$
+tryPred x | case unroll [$\mu X . 1 + X$] $x$ of
+              inl(()) => inl(()),
+              inr($x'$) => inr(()) = inl(())
+tryPred x | otherwise = let $x'$ = unroll [$\mu X . 1 + X$] $x$
+                          in inr($x'$)
+    \end{rfuncode}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Guard Translation Example}
+
+  Translated core program.
+
+    \begin{rfuncode}
+tryPred :: $\mu X . 1 + X$
+tryPred x = case unroll [$\mu X . 1 + X$] $x$ of
+              inl(()) => inl(())
+              inr(()) => let $x'$ = unroll [$\mu X . 1 + X$] $x$
+                         in inr($x'$)
+    \end{rfuncode}
+
+\end{frame}
+
+\frame{\frametitle{Records}
+
+  Records are labeled products (and dual to variants).
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    \gamma = \{ l_1 :: \tau_1, \dots, l_n :: \tau_n  \}
+  \end{align*}
+
+  We require them to be total and we disallow projections. Instead, we
+  introduce a special projection scope:
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    \within{\gamma}{e^\rho}
+  \end{align*}
+
+  Translations of introductions of records construct an $n$-ary product
+  directly. \vspace{0.5em}
+
+  A record scope is a chain of let-expressions
+  record and introduce
+
+}
+
+\begin{frame}[fragile]\frametitle{Record Translation Example}
+
+  Light Program containing records.
+
+    \begin{rfuncode}
+Vector = { x: $\mu X . 1 + X$, y: $\mu X . 1 + X$, z: $\mu X . 1 + X$ }
+
+$f~(x: \mu X . 1 + X)~(y: \mu X . 1 + X)~(z: \mu X . 1 + X)$ =
+  let $v$ = Vector { x = $x$, y = $y$, z = $z$ }
+  in within $v$:
+       $v.x$ = roll [$\mu X . 1 + X$] inr($v.x$)
+     end
+    \end{rfuncode}
+
+\end{frame}
+
+\begin{frame}[fragile]\frametitle{Record Translation Example}
+
+  Translated core program.
+
+    \begin{rfuncode}
+$f~(x: \mu X . 1 + X)~(y: \mu X . 1 + X)~(z: \mu X . 1 + X)$ =
+  let $v$ = $(x, (y, z))$
+  in let $x'$ = roll [$\mu X . 1 + X$] inr($x$)
+    in $(x', (y, z))$
+    \end{rfuncode}
+
+\end{frame}
+
+
+\frame{\frametitle{Misc}
+
+  In the thesis, we presented two more transformations, not worthy of a lengthy
+  discussion:
+
+  \begin{itemize}
+
+    \item Arbitrarily sized products.
+
+    \item Multiple let-expressions in a row.
+
+  \end{itemize}
+
+  Both of these have straightforward translations by unfolding.
+
+}
+
+\section{What Else?}
+
+
+\frame{\frametitle{Anonymous Functions and Binary Operators}
+
+  Let us consider two translations which are not very amenable: anonymous
+  functions and binary operators. \vspace{0.5em}
+
+  \begin{itemize}
+
+    \item Anonymous functions are tricky as we need to take them out of their
+      lexical scope. What information do they use?
+
+    \item Binary operators are tricky as we transform the right operand, but
+      this does not fit well with what is expected:
+
+    \vskip -1.5\abovedisplayskip
+    \begin{align*}
+      a \odot b = c && 2 + 3 = 5 \\
+      a \odot^{-1} c = b && 2 - 5 = 3
+    \end{align*}
+
+  \end{itemize}
+
+}
+
+\frame{\frametitle{Higher Order Programming}
+
+  Remember that we want to design a garbage-free language. \vspace{0.5em}
+
+  Supporting general higher-order functions means variables can take on
+  arbitrary functions as values. \vspace{0.5em}
+
+  Consider the following function:
+
+  \vskip -1.5\abovedisplayskip
+  \begin{align*}
+    g~(x : \tau) = \lett{f'}{\texttt{rtwice } f}{f'~x}
+  \end{align*}
+
+  How is $f'~x$ computed? The function $f'$ is unknown during inverse
+  evaluation. Therefore this generates a \emph{closure}.
+
+}
+
+\section{Introduction$^\dagger$}
+
+\frame{\frametitle{Introduction$^\dagger$}
+
+  We set out to add a type system to \rfun, but ended up designing a new
+  language with a relevant type system. \vspace{0.5em}
+
+  We showed evaluation rules and backwards determinism. \vspace{0.5em}
+
+  We showed that it is possible to inverse interpret \rfunc programs. \vspace{0.5em}
+
+  We showed syntactic sugar over the core language to make \rfunc more modern. \vspace{0.5em}
+
+  The work in this thesis has also been made into an article.
+
+}
+
+\end{document}

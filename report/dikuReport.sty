@@ -1,0 +1,158 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+%
+% Created by Michael Kirkedal Thomsen, shapper@diku.dk
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%!TEX root = main.tex
+
+\RequirePackage{eso-pic,graphicx,ifthen,array,multirow}
+
+% Supervisor
+\newcommand\supervisor[1]{\renewcommand\@supervisor{#1}}
+\newcommand\@supervisor{\@latex@error{No \noexpand\supervisor given}\@ehc}
+\newcommand\cosupervisor[1]{\renewcommand\@cosupervisor{#1}}
+\newcommand\@cosupervisor{\@latex@error{No \noexpand\cosupervisor given}\@ehc}
+
+% Optional subject
+%\newcommand\subject[1]{\renewcommand\@subject{#1}}
+%\newcommand\@subject{\@latex@error{No \noexpand\subject given}\@ehc}
+
+\newcommand\subject[1]{
+\ifx\@subject\undefined
+  \newcommand\@subject{#1}
+\else
+  \renewcommand\@subject{#1}
+\fi}
+
+
+% Thesis type
+\newcommand\thesistype[1]{\renewcommand\@thesistype{#1}}
+\newcommand\@thesistype{\@latex@error{No \noexpand\thesistype given}\@ehc}
+% Thesis comment
+\newcommand\thesiscomment[1]{\renewcommand\@thesiscomment{#1}}
+\newcommand\@thesiscomment{\@latex@error{No \noexpand\thesiscomment given}\@ehc}
+
+
+% Optional subtitle
+\newcommand\subtitle[1]{
+\ifx\@subtitle\undefined
+	\newcommand\@subtitle{#1}
+\else
+	\renewcommand\@subtitle{#1}
+\fi}
+
+% Optional keywords
+\providecommand{\keywords}[1]{\par\addvspace\baselineskip
+\noindent{\textbf{Keywords:}}\enspace\ignorespaces#1}%
+
+% ACM CCS Optional keywords
+\providecommand{\ACMclass}[1]{\par\addvspace\baselineskip
+\noindent{\textbf{Categories and Subject Descriptors:}}\enspace\ignorespaces#1}%
+
+% Optional Danish abstract
+\renewcommand{\abstractname}{\larger Abstract}
+
+\newenvironment{resume}{\renewcommand{\abstractname}{\larger Dansk Resum\'e}\begin{abstract}}{\end{abstract}}
+
+
+% MAKE TITLE PAGE
+\renewcommand{\maketitle}{
+\thispagestyle{empty}%
+%
+% INSERT BACKGROUND
+%\AddToShipoutPicture*{\put(0,0){\includegraphics*[width=\paperwidth]{background}}}%
+\AddToShipoutPicture*{\put(0,0){\includegraphics*[viewport=0 0 700 600]{natbio-farve}}}
+\AddToShipoutPicture*{\put(0,602){\includegraphics*[viewport=0 600 700 1600]{natbio-farve}}}
+\AddToShipoutPicture*{\put(0,0){\includegraphics*{nat-en}}}
+%
+% INSERT TITLE
+\ifx\@subtitle\undefined%
+  \AddToShipoutPicture*{\put(50,600){%
+    \begin{minipage}[t]{.83\paperwidth}%
+      {\textbf\LARGE PhD thesis}\vspace{12px}
+      
+      {\Large\@author}\vspace{36px}
+
+      {\Huge\@title}\vspace{8px}
+    \end{minipage}%
+  }}%
+\else%
+  \AddToShipoutPicture*{\put(50,600){%
+    \begin{minipage}[t]{.83\paperwidth}%
+      {\textbf{\LARGE \@thesistype}}\vspace{12px}
+      
+      {\LARGE\@author}\vspace{36px}
+
+      {\Huge\@title}\vspace{8px}
+      
+      {\LARGE\@subtitle}\vspace{8px}
+    \end{minipage}%
+  }}%
+\fi%
+%
+% INSERT REPORT NUMBER AND IS NUMBER
+  \AddToShipoutPicture*{\put(50,120){\parbox{.83\paperwidth}{\large Academic advisor: \begin{tabular}[x]{@{}l@{}}\@supervisor\end{tabular}}}}%
+  \AddToShipoutPicture*{\put(50,100){\parbox{.83\paperwidth}{\large Academic co-advisor: \begin{tabular}[x]{@{}l@{}}\@cosupervisor\end{tabular}}}}%
+  \AddToShipoutPicture*{\put(50,80){\parbox{.83\paperwidth}{\large Submitted: \@date}}}%
+%
+% END PAGE
+~
+\pagestyle{empty}%
+\cleardoublepage
+\begin{titlingpage}
+\begin{center}
+~\\
+\vspace{2cm}
+\Huge\textbf\@title \\
+\large~\\
+\huge\@subtitle \\%
+\vspace{2cm}
+\LARGE\textbf\@author \\%
+\Large DIKU, Department of Computer Science, \\
+\Large University of Copenhagen, Denmark \\%
+\vspace{1cm}
+\@date \\
+\vspace{6cm}
+\textbf{\@thesistype}\\%
+~\\
+\emph{\@thesiscomment}%
+\end{center}
+\clearpage
+\normalsize
+%\pagestyle{plain}%
+%\thispagestyle{plain}%
+\noindent\begin{tabular}{p{.26\textwidth}p{.68\textwidth}}%
+%Affiliation & The PhD School of Science, Faculty of Science, University of Copenhagen, Denmark \\%
+%& \\%
+Author: \vfill& \begin{tabular}[x]{@{}l@{}}\@author\end{tabular} \\%
+& \\%
+Affiliation: & DIKU, Department of Computer Science, \\&University of Copenhagen, Denmark \\%
+& \\%
+Title: & \@title~/~\@subtitle \\%
+& \\%
+Academic advisor: & \begin{tabular}[x]{@{}l@{}}\@supervisor\end{tabular} \\%
+& \\%
+Academic co-advisor: & \begin{tabular}[x]{@{}l@{}}\@cosupervisor\end{tabular} \\%
+& \\%
+Submitted: & \@date \\%
+\end{tabular}%
+~\\
+~\\
+~\\
+~\\
+\ifx\@subject\undefined
+  ~
+\else
+  \begin{center}\textbf{Short abstract}\end{center} %
+  \centering\parbox{.83\textwidth}{\@subject}
+  
+\fi
+
+
+
+
+\end{titlingpage}
+}
+
+

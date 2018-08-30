@@ -1,0 +1,87 @@
+-- This file has been generated from package.yaml by hpack version 0.20.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 324ac3aaf2ea643ee9aa3ef6deeed2a0a396186a95e676619f7231af52bb7940
+
+name:           corefun
+version:        0.1.0.0
+synopsis:       RFun parser
+description:    Please see the README on Github at <https://github.com/githubuser/typed-rfun#readme>
+homepage:       https://github.com/githubuser/typed-rfun#readme
+bug-reports:    https://github.com/githubuser/typed-rfun/issues
+author:         Petur Andrias Højgaard Jacobsen
+maintainer:     peturhjac@gmail.com
+copyright:      2018 Petur Andrias Højgaard Jacobsen
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+cabal-version:  >= 1.10
+
+extra-source-files:
+    ChangeLog.md
+    README.md
+
+source-repository head
+  type: git
+  location: https://github.com/githubuser/typed-rfun
+
+library
+  hs-source-dirs:
+      src
+  build-depends:
+      base >=4.7 && <5
+    , containers
+    , megaparsec
+    , mtl
+    , parsec
+  exposed-modules:
+      Ast
+      CommonAst
+      Converter
+      Core.CoreAst
+      Core.CoreParser
+      Core.CorePrettyPrinter
+      Errors
+      FirstMatch
+      Interpreter
+      Parser
+      TransErrors
+      Transpiler
+      TypeChecker
+  other-modules:
+      Paths_corefun
+  default-language: Haskell2010
+
+executable corefun-exe
+  main-is: Main.hs
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
+  build-depends:
+      base >=4.7 && <5
+    , containers
+    , corefun
+    , megaparsec
+    , mtl
+    , parsec
+  other-modules:
+      Paths_corefun
+  default-language: Haskell2010
+
+test-suite corefun-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , containers
+    , corefun
+    , megaparsec
+    , mtl
+    , parsec
+  other-modules:
+      Paths_corefun
+  default-language: Haskell2010

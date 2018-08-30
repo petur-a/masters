@@ -1,0 +1,9 @@
+----
+--
+-- Program fails tranformation as f has the non-existent typecalss Test in its
+-- context.
+--
+----
+
+f :: Test 'a => 'a . 'a
+f x = x

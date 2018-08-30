@@ -1,0 +1,569 @@
+\chapter{Discussion}\label{sec:discussion}
+
+\section{Updated Grammar}
+
+We present the updated grammar of programs belonging to the light language in
+Fig.~\ref{fig:updated_grammar}. We define the domains which variants, records
+and type classes range over in Fig.~\ref{fig:domains}. The updated grammar is a
+superset of the original grammar. Specifically, any program in the core
+language is also a program in the updated language.
+
+\begin{figure}[ht!]
+\begin{align*}
+         \kappa \in \text{Type class names}
+  \qquad \beta  \in \text{Variant names}
+  \qquad \gamma \in \text{Record names}
+\end{align*}
+\caption{Domains}\label{fig:domains}
+\end{figure}
+
+\begin{figure}[ht!]
+\begin{tabular}{p{0.55\textwidth}p{0.45\textwidth}}
+$q ::= d^*$
+    & Program definition\\
+$d ::= f$
+    & Function definition\\
+$\hspace{1.9em}\mid \class{\kappa~\alpha}{[f \Rightarrow \tau_f]^+}$
+    & Type class definition\\
+$\hspace{1.9em}\mid \instance{\kappa\ (\beta~\alpha^*)}{[f \Rightarrow e]^+}$
+    & Type class instance\\
+$\hspace{1.9em}\mid \beta~\alpha^* = [\texttt{v}~ [\tau\alpha]^*]^+$
+    & Variant definition\\
+$\hspace{1.9em}\mid \gamma = \{ [l :: \tau]^+ \}$
+    & Record definition\\
+$e ::= x$
+    & Variable name\\
+$\hspace{1.9em}\mid ()$
+    & Unit term\\
+$\hspace{1.9em}\mid \inl{e}$
+    & Left of sum term\\
+$\hspace{1.9em}\mid \inr{e}$
+    & Right of sum term\\
+$\hspace{1.9em}\mid \texttt{v}~e^*$
+    & Variant term\\
+$\hspace{1.9em}\mid (e_1, \dots, e_n)$
+    & Product term\\
+$\hspace{1.9em}\mid \textbf{let } [l = e]^+ \textbf{ in } e$
+    & let-expression \\
+$\hspace{1.9em}\mid \smpcase{e}{[e \Rightarrow e]^+}$
+    & case-expression\\
+$\hspace{1.9em}\mid \caseofs{e}{\inl{x}}{e}{\inr{y}}{e}{e}$
+    & \text{Safe case-expression} \\
+$\hspace{1.9em}\mid \caseofu{e}{\inl{x}}{e}{\inr{y}}{e}$
+    & \text{Unsafe case-expression} \\
+$\hspace{1.9em}\mid f~\alpha^*~e^+$
+    & Function application\\
+$\hspace{1.9em}\mid f!~\alpha^*~e^+$
+    & Inverse Function application\\
+$\hspace{1.9em}\mid \roll{\tau}{e}$
+    & Recursive-type construction \\
+$\hspace{1.9em}\mid \unroll{\tau}{e}$
+    & Recursive-type destruction \\
+$\hspace{1.9em}\mid \within{\gamma}{e^\rho}$
+    & Record scope\\
+$e^\rho ::= \rho(\gamma, l)$
+    & Record projection \\
+$\hspace{2.2em}\mid \rho(\gamma, l) = e^\rho$
+    & Record cell assignment \\
+$\hspace{2.2em}\mid \lett{\rho(\gamma, l)}{e^\rho_1}{e^\rho_2}$
+    & Record let-assignment \\
+$l ::= x$
+    & Definition of variable\\
+$\hspace{1.7em}\mid (x_1, \dots, x_n)$
+    & Variable product\\
+$f ::= f~\alpha^*~\tau^+ [f\ e^+ [\mid g]? = e]^+$
+    & New Style Function Definition\\
+$\hspace{1.9em}\mid f~\alpha^*~(x:\tau_a)^+ = e$
+    & Old Style Function definition
+\end{tabular}
+
+\caption{Grammar for the updated language.}\label{fig:updated_grammar}
+\end{figure}
+
+\section{Omitted Abstractions}
+
+Proposing additional translations  which could have been considered in
+Sec.~\ref{sec:prog} is an indefinite process. Some lesser, mostly stylistic,
+propositions will be mentioned as future work in Sec.~\ref{sec:future_work}.
+Other translations are a bit more tricky. We present here two translations,
+anonymous functions and infix operators, which were considered as translations
+but are not as fitting to translate as they seem on the surface. They are
+interesting as they do not necessarily work intuitively in a reversible
+setting.
+
+\subsection{Anonymous Functions}
+
+Anonymous functions are nameless functions, modeled as abstractions from the
+lambda calculus invented by Church~\cite{Church:1936}. An abstraction is
+constructed from a variable name $x$ and an inner term $t$ where $x$ is a free
+variable in $t$. An application $t~t'$ substitutes a term $t'$ for $x$ in $t$.
+A term is closed when it contains no more free variables. Usually abstractions
+are generalized to take any number of variables as arguments.
+
+\begin{itemize}
+
+  \item \textbf{Variable:} $x$
+
+  \item \textbf{Abstraction:} $(\lambda x .~t)$
+
+  \item \textbf{Application:} $t~c$
+
+\end{itemize}
+
+We would have to impose certain restrictions on where anonymous functions could
+be declared to maintain the restricted higher order property of \rfunc. To
+mirror how restricted higher order functions may be used in the core language,
+they should only be constructable in two places in the light language: directly
+as expressions supplied as an ancillary parameter during function application or
+as function applications themselves.
+
+An obvious translation of anonymous functions would be to construct a top-level
+function for each anonymous function, taking care of name collisions. Each
+newly constructed function would then be subjected to precisely one application
+in the full program, at the position where it was previously defined.
+
+The main issue with anonymous functions is determining the scope of variables
+involved in the open term of the abstraction's body. \rfunc and its light
+counterpart use lexical scoping, meaning the context in which the anonymous
+function lives in is fully available. A contrived example could be:
+
+\begin{rfuncode}
+f $x$ = let $z$ = inr($x$)
+   in let $y$ = (\ $x'$ -> ($z$, $x'$)) $x$
+   in $y$
+\end{rfuncode}
+
+The only usage of the value $z$ is in the abstraction's body, even though $z$
+is not supplied to the anonymous function as a parameter. In any conventional
+functional language this has well-defined behaviour, and we expect it to be
+well-defined in \rfunc as well. Alas, the abstraction body is removed from its
+lexical scope when the translation occurs, as it is moved into a new top-level
+function $f_\lambda$ --- meaning $z$ is no longer available for $f_\lambda$.
+This indicates that we need a more thorough analysis of which values are
+applied to the statically generated function during translation.
+
+\subsection{Infix Operators and Numerals}\label{subsec:numerals}
+
+Natural numbers can be added relatively easily as an abstraction over the unary
+numerals. But they are only really practical if we simultaneously add
+arithmetic operators. Arithmetic operators are a subset of infix binary
+operators. An infix operator $\odot$ is reversible if we may transform either
+operand while keeping the other intact, so $x \odot y = (x, x \odot y)$, and if
+there is an inverse operation $\odot^{-1}$ so that $x \odot^{-1} (x \odot y) =
+(x, y)$. The operator may be self-inverse, so $x \odot (x \odot y)) =
+(x, y)$.
+
+The following are amongst the arithmetic operators which are reversible, with
+their inverses provided:
+
+\begin{align*}
+  (+)^{-1} &\defeq (-) \\
+  (\times)^{-1} &\defeq (\div) \\
+\end{align*}
+
+Supporting infix operators requires non-trivial design choices because applying
+the inverse operation on the resulting value of the forward operation might
+require that we go against the intuition of how these operations work if the
+inverse operator is not commutative. This is because the transformed value
+necessarily is the right operand (because of the design of ancillae parameters
+leaning left). This issue is evident from both operator pairs $+/-$ and
+$\times/\div$, as we have:
+
+\begin{align*}
+  2 + 3 &= 5 \\
+  2~+!~5 &= 3
+\end{align*}
+
+It appears as if $2 - 5 = 3$, if we naively define $(-)$ as the inverse of
+$(+)$. The analogous scenario crops up for $(\div)$ as the inverse of
+$(\times)$.  A possible fix would be to instead transform the left operand for
+binary operations, but this really does not align well with the type system as
+the type system dictates that the right most parameter of a function is always
+transformed.
+
+There are a couple of other options. We can forbid the declaration of new infix
+operators and fix the behaviour of the operators we do define as additional
+syntactic sugar. That is, we can define any infix operator into an equivalent
+operator in Polish notation as $l \odot r \defeq (\odot)~r~l$, with the
+operands reversed (which works fine in the forward direction as well as both
+$+$ and $\times$ are commutative). This also makes it simple to transform the
+operations we \emph{do} write, as we simply predefine the functions which
+correspond to infix operators.
+
+If we do allow the generation of new infix operators, the programmer should
+have access to some mechanism through which they can define what precedence the
+operands should have in the inverse direction or if the operator is
+commutative.
+
+\paragraph{Encoding Natural Numbers}
+
+Natural numbers as numerals are generalized over the Peano numbers encoded by
+the recursive type $\mu X .~1 + X$. They are translated the obvious way by
+recursive descent on a numeral $n$ as a \textbf{roll}-term on a $\inl{n - 1}$
+expressions until we reach the bottom numeral $0$, which is constructed as
+$\inr{()}$. That this construction is correct can be shown with induction.
+
+\begin{proof}
+
+  The induction hypothesis states, by the principle of well-formed induction,
+  that any element $n$ in the infinite domain has a non-infinite set of values
+  which which it relates to, that is, the set $A = \{ n' \mid n' \prec n \}$ is
+  finite. If it is finite there must be a least element $n_0$ for which
+  $\forall n' \in A.\ n_0 \prec n'$. For the recursive type $\mu X . 1 + X$
+  this is $\roll{\mu X . 1 + X}{\inl{()}}$, the first unary number, which is a
+  well-formed expression in the core language.
+
+  For the induction step we assume for any $n$ we have a well-formed expression
+  which denotes $n$ in the core language and want to prove that we form a
+  well-formed expression for $n + 1$. Then we can simply take the next Peano
+  number. Denote $c$ the canonical representation of $n$. Then we take $n + 1$
+  to be $\roll{\mu X . 1 + X}{\inr{c}}$.
+
+\end{proof}
+
+\section{Reversible Higher Order Language}\label{sect:higher_order}
+
+We now move on to another famous advantage of functional languages:
+higher-order functions. Higher-order functions are functions which take
+functions as arguments or return functions. They are overall a sparsely
+discussed topic in a reversible setting --- especially general higher order
+reversible functional programming, though some sources exist~\cite{Bohne}.
+More interesting are reversible effects, which allow various interesting
+properties like reversible side effects and concurrency. Reversible effects
+have nice models in Category Theory as inverse arrows~\cite{Heunen:2018} and
+reversible monads~\cite{Heunen:2015}.
+
+We have seen that taking functions as arguments is unproblematic, given we can
+guarantee that the function is statically known. Then what is the roadblock
+regarding arbitrary higher-order functions in a reversible setting?
+
+We should reiterate the fact that our ultimate goal is to design a
+\emph{garbage-free} language. Being garbage-free especially entails that the
+amount of information we need to maintain for a program to remain reversible is
+minimal. We also remind the reader about the notion of a \emph{trace}, which is
+a particular strategy to transform any non-reversible program into a reversible
+program by consistently store information critical to knowing the context in
+which a computation took place.
+
+Now, let us temporarily adopt the view that higher-order functions are allowed
+in \rfunc. This implies that any variable is allowed to be assigned a function
+value. Say we have a function \rfuninl{twice} which takes a function $f$ and
+returns a function which applies $f$ twice, defined as $\texttt{twice}~f = f
+\circ f$. Its type signature in an irreversible setting is $\texttt{twice}: (A
+\rightarrow A) \rightarrow (A \rightarrow A)$. Evidently it transfers well to a
+reversible setting, where we can define it as $\texttt{rtwice}: (A
+\leftrightarrow A) \leftrightarrow (A \leftrightarrow A)$, as the function $f$
+is transformed cleanly. Now, consider the following function:
+
+\begin{rfuncode}
+  g $x$ = let $f'$ = rtwice $f$
+          in $f'$ $x$
+\end{rfuncode}
+
+Where $f$ is some static function defined for the program. We have that $g~x$
+will return $c = f(f(x))$. But given just the canonical form $c$, the context
+in which it was computed is not immediately clear. Consider computing $g^{-1}$
+--- what is the function $f'$? In this particular instance we easily see that
+it is the function generated by \rfuninl{twice} on $f$, but this information is
+not known presently in the inverse direction. The issue becomes more evident
+when we consider some arbitrary $f'$ which may have been dynamically introduced
+\emph{anywhere}.
+
+We are therefore forced to store information about \emph{how} a value was
+produced if it is not clear from the syntactic construct itself, so we know how
+to invert it. Doing this requires that we for a function application of a
+dynamically introduced function return a \emph{closure} containing the
+definition of the applied function $f'$ as well as the result of $f'~x$. The
+closure is, as a value, going to be treated as $f'~x$ going forward, but
+storing $f'$ becomes important for inverting the computation.
+
+This one characteristic, which is unavoidable if we want to support full-on
+higher order behaviour, adds what surmounts to a pseudo-trace with heavy use
+of higher-order functions, making higher-order functions unattractive.
+
+% \begin{itemize}
+%
+%   \item
+%
+%   \item Well, what do we do when we uncompute a new function? We must we able
+%     to decouple the function and from the information which was used to
+%     generate it. This information might just be the function itself.
+%
+%   \item If we use some other information --- whatever information it was, it
+%     needs to be stored individually in the new function scope. This dictates
+%     that when a new function is generated, it is actually a closure object.
+%     Does any new function need to be uncomputed? It is new information after
+%     all. What if we use it once for example?
+%
+%   \item So obviously, closures end in traces in some sort of way, where the
+%     signatures of functions become convoluted because we keep needing to save
+%     values which went into creating the new function. A good example is
+%     currying. What does an irreversible currying function look like?
+%
+%     \begin{align*}
+%       curry :: (A \times B \rightarrow C) \rightarrow (B \rightarrow (A \rightarrow C))
+%     \end{align*}
+%
+%     $B$ and $A$ are switched as function application is right-associative.
+%     Currying transforms a function on $n$ parameters into a function which can
+%     take one parameter at the time, allowing for partial application of
+%     parameters.
+%
+%     Let us transform it to something which we know from the types of \rfunc. We
+%     write a function signature in for the type system as something which is
+%     reminiscent of currying, but it is only a shorthand to ease the
+%     formalization of application. Really, the type signature of a function is,
+%     after static parameters are included:
+%
+%     \begin{align*}
+%       f &: \tau_1 \rightarrow (\tau_2 \leftrightarrow \tau_3) \\
+%       \Leftrightarrow f &: \tau_1 \times \tau_2 \leftrightarrow \tau_1 \times \tau_3 \\
+%     \end{align*}
+%
+%     Now what is the type of currying?
+%
+%     \begin{align*}
+%       \Leftrightarrow curry &:  (\tau_1 \times \tau_2 \leftrightarrow \tau_1 \times \tau_3) \leftrightarrow~?
+%     \end{align*}
+%
+%     A currying function should turn the function which takes two parameters to
+%     one where it is possible to supply one and still get something back, namely
+%     a new function. But we should also be able to restore the function after
+%     one parameter has been applied. Thus it might look something like this:
+%
+%     \begin{align*}
+%       curry &:  (\tau_1 \times \tau_2 \leftrightarrow \tau_1 \times \tau_3)
+%       \leftrightarrow (\tau_1 \leftrightarrow (\tau_1 \times (\tau_2 \leftrightarrow \tau_3)))
+%     \end{align*}
+%
+%     So what should we be able to do with a currying function? Well, the
+%     function should itself be salvageable from the new function, which is easy
+%     as no parameter has been supplied. But what does each side look like? What
+%     must a curried function guarantee about the parameters supplied to each
+%     partial application? The syntax of \rfunc simply does not allow arbitrary
+%     functions (or in fact, creation of new functions)
+%
+%     % The function (call it $f$) $curry$ is being called on must be reversible,
+%     % so its signature should be $f: A \rightarrow (B \leftrightarrow C)$, as $A$
+%     % is static. But after $A$ has been applied, how do we know what $A$ was? We
+%     % need to be able to extract $A$ back. $A$ is static for the function $curry$
+%     % is applied to, so
+%
+%   \item Let's move away from currying, it is very impractical. How about
+%     function composition?
+%
+%     \begin{align*}
+%       (\circ) :: (A \leftrightarrow B) \times (B \leftrightarrow C) \leftrightarrow (A \leftrightarrow C)
+%     \end{align*}
+%
+%     We can use composition for a number of things. How about a function which
+%     takes a function and applies it twice?
+%
+%     \begin{align*}
+%       & twice :: (A \leftrightarrow A) \leftrightarrow (A \leftrightarrow A) \\
+%       & twice~f = f \circ f
+%     \end{align*}
+%
+%     Now a question is: is there even a good (possible) way to write higher
+%     order functions in our language? It is not point free nor has an
+%     application operator $(.)$ (as seen in Haskell), so how could we even
+%     describe it? We really cannot I think, but if higher order functions were
+%     something we would look to support, we could add it. I guess that is the
+%     argument that should be made.
+%
+%     How about a function which calls the inverse? So a reversal function?
+%
+%     \begin{align*}
+%       rev :: (A \leftrightarrow B) \leftrightarrow (B \leftrightarrow A)
+%     \end{align*}
+%
+%     There seems to at least be some class of naturally injective functions
+%     which might be composed/altered/generated. What do they have in common, if
+%     anything? It might be something like: Functions which consume information
+%     to create new functions need to still preserve the information in a
+%     closure, so we gain nothing by them. Functions which only use functions as
+%     parameters have obvious inverses, since the function parameters must
+%     themselves be inverse. So $curry$ and $eval$ are ugly, while $rev$, $twice$
+%     and $(\circ)$ are okay. Does it necessarily have something to do with
+%     partial evaluation being problematic?
+%
+%   \item I have not really been able to find a formal argument made for why
+%     higher order functions are hairy for reversible languages --- or at least
+%     not in the literature, so as not to say that the argument is not there. I
+%     am sure that it is just obvious from the theory itself and not quite worthy
+%     of a lengthy discussion, due to the obviousness of the situation.
+%
+%   \item \cite{Bohne} discusses general higher order reversible functional
+%     programming. It is the only source I could find. What does he do? The paper
+%     is a bit confusing as the language incorporates a tier style of
+%     reversibility to the possible functions, so they are not all invertible and
+%     it can compute more than the injective functions. Still, it seems to
+%     support the notion that for composed functions to be invertible, we look to
+%     keep original functions to not throw away information, which means:
+%     closures.
+%
+% \end{itemize}
+%
+% \subsection{The Category Theory}
+%
+% \begin{itemize}
+%
+%   \item Let's try to do some category theory: Symmetric monoidal categories lie
+%     at the base of linear (and relevant logic). They are categories enriched
+%     with a monoidal function (defined in the standard way) as well as a notion
+%     of maximum commutativity, meaning that the tensor operator has a natural
+%     isomorphism which ensures that it supports switch of object operands and
+%     that the natural isomorphism has an inverse.
+%
+%   \item Inverse categories lie at the base of reversible programming. There are
+%     a couple of ways to define these. They can be said to be restriction
+%     categories. Restriction categories are any category with the added
+%     restriction structure with some axioms. An example of a restriction
+%     category is \textbf{PFn}, the category of partial function. Inverse
+%     categories are restriction categories where every morphism is a partial
+%     isomorphism.
+%
+%     A dagger category is a category equipped with a dagger endofunctor
+%     $(-)^\dagger$ which distributes over composition and is involutive etc. An
+%     example of a dagger category is \textbf{PInj} with $f^\dagger = f^{-1}$.
+%     Inverse categories are dagger categories where for each $f$ we have $f
+%     \circ f^{-1} \circ f = f$.
+%
+%     It can also more simply be defined as a category where for each morphism
+%     $f$ there is a unique morphism $g$ with domain and image switched so that
+%     $f \circ g \circ f = f$. This looks a lot like the definition based on
+%     dagger categories.
+%
+%   \item Reversible effects have literature in inverse arrows and reversible
+%     monads.~\cite{Heunen:2015} discusses reversible effects as a special type
+%     of monad, while~\cite{Heunen:2018} works with inverse arrows.
+%
+% \end{itemize}
+
+\section{Future Work}\label{sec:future_work}
+
+% \subsection{Empty Type}
+%
+% To complete the description of algebraic data types, the empty type $0$ is
+% often included. It contains no values on its own. Instead, the empty type
+% unifies with any other type $\tau$ by lifting the set of values $\tau$ contains
+% to its previous set of values in addition to the bottom element $\bot$. For
+% example, the type $1$ is lifted to $1_\bot = \{\bot\} \cup 1$, and thus has two
+% inhabitants:
+%
+% \begin{align*}
+%   1_\bot = \{ \bot, () \}
+% \end{align*}
+%
+% Because $\bot$ is added to any type through lifting, we can decide that $\bot$
+% can be typed as anything we wish. Adding an empty type explicitly allows us to
+% incorporate an additional avenue of partiality of functions, as we now can say
+% that a function may evaluate to $\bot$ directly. Evaluation of $\bot$ aborts
+% the program. Of course, $\bot$ also unifies with any expression and is its own
+% closed term, so care should be taken to defer a case arm which contains a
+% $\bot$ expression.
+
+\subsection{Inductive First Match Policy Guarantee}
+
+The static first match policy analysis presented in Sec.~\ref{sec:staticFMP} is
+only possible by investigating the open form of the program text but it also
+makes it somewhat limited. More specifically, it does not inspect the closed
+form of expression of recursive types, meaning case-expressions operating on
+recursively defined data structures may never generate static first match
+policy guarantees, even though there is a large class of functions for which it
+is strictly possible. Expressions of a recursive type require a more thorough
+analysis. What could such a method look like?
+
+Here we adhere to an \emph{inductive principle}, which we have to define
+clearly. We introduce a \texttt{plus} function to develop the subject:
+
+\begin{rfuncode}
+  plus $n_0$: $\mu X . 1 + X$ $n_1$: $\mu X . 1 + X$ =
+    case unroll [$\mu X . 1 + X$] $n_1$ of
+      inl() => ($n_0$, $n_0$)
+      inr($n'$) => let ($n_0'$, $n_1'$) = plus $n_0$ $n'$
+                 in let succ = roll [$\mu X . 1 + X$] inr($n_1'$)
+                 in ($n_0'$, succ)
+\end{rfuncode}
+
+As in the well-known structural or mathematical induction, we must identify
+base cases for the induction hypothesis. A simple solution is to define these
+as the branches in which a function application to the function which is being
+evaluated does not occur. There might be multiple such branches without issue.
+Note that this does not work well with mutually recursive functions. For
+\texttt{plus} there is only one base case, the left arm of the main
+case-expression.
+
+Analogously the inductive step is defined on each branch which contains a
+recursive call. For each recursive call the induction hypothesis says that,
+granted the arguments given to the recursive call, eventually one of the base
+cases will be hit. This is because any instance of the recursive type can only
+be finitely often folded, giving a guarantee of the finiteness of the decreasing
+chain. Though there is a catch which should be addressed: Inductive proofs are
+only valid for \emph{strictly decreasing} chains of elements to ensure that the
+recursion actually halts. For example, for \texttt{plus} we need to make sure
+that $n' \prec n_1$. Should the chain not be strictly decreasing, we have that
+the evaluation is non-terminating, and the function is not defined for this
+input.
+
+To tie it all together we need to show that the recursive call in the right arm
+of the \texttt{plus} function does indeed result in the base case in the left
+arm, allowing us to use the induction hypothesis to conclude that $n_0' =
+n_1'$. If we are able to, we may directly treat the return value of the
+recursive function call as an instance of the value which the base case
+returns. We then continue evaluating the body in the inductive step. For
+\texttt{plus} we say that:
+
+\begin{rfuncode}
+  $\dots$ => let ($n_0$, $n_0$) = plus $n_0$ $n'$
+        in let succ = roll [$\mu X . 1 + X$] inr($n_0$)
+        in ($n_0'$, succ)
+\end{rfuncode}
+
+And now we can see that the case-arms are provably disjoint, giving us a static
+guarantee of the first match policy. However, generalizing an implementation
+of inductively derived first match policy guarantees requires usage of proof
+assistants, like \emph{Coq}~\cite{Bertot:2013}, on a growing number of
+identified cases and is rather complex. Further discussion of this has
+therefore been left for future work.
+
+% \subsection{Compilation}
+%
+% There exist a number of reversible computer architectures and instruction sets.
+% Compilation for imperative reversible languages has been shown. Interpretation
+% and self interpretation for \rfun has been shown, but compilation for
+% functional reversible languages has not been shown.
+%
+% Consider how to compile it an what the reversible instruction sets are. BobISA
+% is one~\cite{Caroe:2012, Thomsen:2011}, PISA is another~\cite{Vieri:1995}.
+%
+% \subsection{Other?}
+%
+% Tail recursion and complexity of side condition. Something Michael is
+% interested in.
+
+\subsection{Possible Future Abstractions}
+
+The following is a short, informal bullet point list the authors suggest as
+additional possibilities for abstractions:
+
+\begin{itemize}
+
+  \item Built in syntactic sugar for a number of common data structures. Lists
+    can be further simplified in the following (ubiquitous) way: encoding [] as
+    \texttt{Nil}, the empty list, $(x:xs)$ as \rfuninl{Cons $x$ $xs$}, the head
+    and tail of a list, and $[x_1, x_2]$ as \rfuninl{Cons $x_1$ (Cons $x_2$ Nil)},
+    a literal list construction.
+
+    A built-in \rfuninl{Char} data-type encoding characters can be wrapped in
+    additional syntactic sugar to separate it from any regular variant. Then
+    strings, simply encoded as lists over characters, can be represented as
+    standard in quotation marks, encoding ``$c_1c_2c_3$'' as $[c_1, c_2, c_3]$
+
+  \item A notion of modules, possibly inspired by the Haskell module
+    system~\cite{Diatchki:2002}. Code reuse and modularisation are powerful
+    concepts which are easily transferable to a reversible setting in the form
+    of programs spread over multiple files, as this method is strictly related
+    to exposure of code.
+
+\end{itemize}

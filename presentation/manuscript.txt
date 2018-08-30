@@ -1,0 +1,145 @@
+Hello and welcome.
+
+Reversible computing is the study of computations which can be inverted. This
+means computations for which we can get the original value with the resulting
+value alone.
+
+Usual programming is destructive, and a hailed result from Landauer showed that
+destroying information has a cost.
+
+Allegedly the first reversible language was Janus, an imperative flow-chart
+language with exclusively global variables and a very simple execution model. It
+was later rediscovered and substantially improved.
+
+Reversible functional languages is a relatively unexplored paradigm though. Pi
+and Theseus are reversible point free functional languages built on type
+isomorphisms. A very different reversible functional language is RFun, built on
+constructor terms and a first-match policy. All the mentioned languages compute
+all injective functions.
+
+RFun lacks a type system though. Type systems are nice ---  and with a type
+system we can remove the duplication/equality operator, which isn't very
+intuitive for programmers. We explored the possibility to add a type system but
+RFun is not very type safe. Therefore we started from scratch.
+
+Linear types are a perfect match for reversible computing as they encapsulate
+the idea of resource sensitivity. Hypotheses may be used exactly ones, so they
+may not be duplicated nor destroyed. However, if we embrace the partiality of
+functions (which is good enough for r-Turing completeness) we can relax the
+constriction to must be used at least once.
+
+We present the syntax and typing terms. The syntax is distinctly standard and
+is reminiscent of standard functional languages, barring projections. Two
+advanced properties in polymorphic types and recursive types are added as well.
+These are easily portable to reversible languages. Iso-recursive types are a
+perfect fit as we have two terms in fold and unfold which are inverses of each
+other. We restrict ourselves to rank-1 polymorphic types. In rank-1 polymorphic
+types, type variables may not be substituted with polymorphic types but must be
+substituted for concrete types.
+
+Reversibility of choices is always the hard part. The essential question is:
+What branch was taken in the forward direction? We might keep a trace of
+computation we can follow, but be are designing a garbage-free language, so it
+should be locally invertible. No global state allowed.
+
+CoreFun ensures it with a first-match policy. Intuitively when a value is
+produced by a branch in the forward direction, it is made sure that it can not
+have been produced by a previous branch. This way, when running backwards we
+only have to try the branches in the correct order to know for certain that the
+first branch we hit is correct.
+
+This property can only be ensured by the semantics, if we are going to design
+any non-trivial language. So the old saying "well-typed programs do not go
+wrong" is not quite true here.
+
+To show this, we introduce the concepts of leaves. WRITE HERE.
+
+An issue with using the first match policy to ensure reversibility is that it
+might lead to implicit increases in run time if the algorithm is not defined in
+a good way. This was shown for a plus algorithm, which was quadratic in its
+input because the first match policy check was linear.
+
+We want to look at alternative measures for ensuring reversibility. One of them
+in inspired by the exit assertions on control flow constructs of Janus. In
+CoreFun, we allow the appending of exit assertions in case expressions. Since
+case expression are binary, we may define a single exit assertion and want it
+to hold after the left branch and by implication not hold after the right
+branch.
+
+The other thing we want to do is trying to statically guarantee that the first
+match policy always will hold. This allows us to forego the inefficient side
+condition. Now, when can we guarantee this?
+
+For each case-expression in a function, we use the unification relation on the
+Cartesian products of the sets of leaves for each branch. The unification
+relation is also defined for open terms, where variables unify as broadly as
+possible, namely with anything.
+
+With the type system, another thing we can do is exhaust the input space of the
+function, if the function is simple in a sense. As this is an exhaustive
+method, we need to some guarantees. The problems are infinite domains and
+non-halting.
+
+Domains are non-infinite if and only if none of the function's parameters
+comprise a recursive type. As generic types can be instantiated as anything,
+none may be of a generic type either.
+
+Non-termination is generally an undecidable property. There is a lot of
+research on ensuring termination for a growing number of problems, but useful
+non-termination analysis is usually for functions with infinite domains
+which diverge by building some infinite data structure. Since all function
+domains we are interested in are finite, we get away with a simple but also
+conservative analysis. We construct a directed graph where vertices are
+function names and edges are function calls. If there is a cycle, we do not
+attempt to perform the analysis.
+
+Let us move on. I will now discuss inverse computation. The most extreme case
+of running in inverse is the generate-and-test method, which enumerates all the
+possible input values until the resulting value is attained. Very inefficient.
+
+Any regular computable function can be turned into a reversible function
+computing the same thing by adding a trace of information. The Landauer
+embedding turns a 1-tape Turing Machine into a 2-tape Reversible Turing
+Machine. A Bennett method into a three-tape Reversible Turing Machine.
+
+Let us concentrate on programs in reversible languages, specifically Janus to
+start with. A property of reversible languages we often times want is ease of
+program inversion. Program inversion is obtained by presenting a set of program
+inverters, one for each syntactic domain. Program inversion of Janus is very
+simple. The language at hand, CoreFun, less so. There have been proposed
+general methods for program inversion of functional reversible languages, but a
+key insight is that duplication and equality are inverses of each other, and
+this property is exploited by introducing an operator which performs this
+check. We do not have this operator in CoreFun.
+
+This is not a problem though, as the relational semantics do make it possible
+to inverse interpret a program. To do this we introduce a set of inverse
+inference rules. It is notably different from forward evaluation. Forward
+evaluation used substitution to map variables to values, but there is no
+variable name which corresponds to the input value to the inverse function,
+so substitution is not applicable.
+
+Instead, the judgement is going to reflect that, given a canonical value which
+is the output and an expression, we can derive a store sigma which contains
+bindings for all the open variables in the expression. For a function, this
+notably includes a binding to the input variable, as it must occur in the
+function body. In the thesis we prove the correctness of the inverse semantics
+by applying this principle.
+
+The semantics thus try to predict how the program was run in the forward
+direction from the input value in the backwards direction. Some rules are
+rather weird. A key rule is the I-Bind rule, which knows that when a variable
+name is encountered when trying to predict the function for the value c, then
+the variable must have been bound to c. I-Bind2 allows for repetition of
+variables to occur, as long as the value remains the same. This allows
+relevance.
+
+We now move on to looking at improving the programming experience in CoreFun in
+the form of translation schemes from a notationally light language to CoreFun.
+This allows us to introduce various improvements on the programming experience
+without having to corroborate them in the formal proofs, as long as we preset a
+valid translation. This the source program is written in the light language and
+the target program in the core language.
+
+The first translation we show is of variants. A variant definition defines a
+new datatype which corresponds to a dynamic 

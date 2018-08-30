@@ -1,0 +1,100 @@
+-- TYPES
+
+type Nat = Null | Succ Nat
+
+type List 'a = Nil | Cons 'a (List 'a)
+
+type Maybe 'a = Nothing | Just 'a
+
+type Bool = True | False
+
+-- CLASSES AND INSTANTIATIONS
+
+class Default 'a where
+  def => 1 <-> 'a
+
+instance Default Nat where
+  def u => roll [Nat] Null
+
+instance Default Bool where
+  def u => True
+
+-- FUNCTIONS
+
+succ :: Nat
+succ n = roll [Nat] (Succ n)
+
+cons :: 'a . 'a -> List 'a
+cons x xs = roll [List 'a] (Cons x xs)
+
+head :: 'a . List 'a -> 1
+head Nil u = Nothing
+head (Cons x xs') u = Just x
+
+tail :: Default 'a => 'a . List 'a -> 1
+tail Nil u = def 'a ()
+tail (Cons x xs) u = xs
+
+last :: Default 'a => 'a . List 'a -> 1
+last Nil u = def 'a ()
+last (Cons x xs) u = case unroll [List 'a] xs of
+    Nil -> x,
+    Cons x' xs' -> last 'a xs' u
+  esac
+
+idx :: Default 'a => 'a . List 'a -> Nat -> 1
+idx ls Null u = case unroll [List 'a] ls of
+    Nil -> def 'a (),
+    Cons x xs -> x
+  esac
+idx ls (Succ n) u = case unroll [List 'a] ls of
+    Nil -> def 'a (),
+    Cons x xs -> idx 'a xs n u
+  esac
+
+length :: 'a . List 'a -> 1
+length Nil u = roll [Nat] Null
+length (Cons x xs') u = let n = length 'a xs' u
+                        in succ n
+
+map :: 'a 'b . ('a 'b . 'a <-> 'b) -> List 'a
+map f Nil = roll [List 'b] Nil
+map f (Cons x xs) = let x' = f 'a 'b x
+                        xs' = map 'a 'b f xs
+                    in cons 'b x' xs'
+
+filter :: 'a . ('a . 'a -> 1 <-> Bool) -> List 'a -> 1
+filter g Nil u = roll [List 'a] Nil
+filter g (Cons x xs) u = let xs' = filter 'a g xs u
+                         in case g 'a x u of
+                           True -> roll [List 'a] (Cons x xs'),
+                           False -> xs'
+                         esac
+
+replicate :: 'a . Nat -> 'a <-> List 'a
+replicate Null x = roll [List 'a] Nil
+replicate (Succ n) x = let xs = replicate 'a n x
+                       in roll [List 'a] (Cons x xs)
+
+zip :: Default 'a, Default 'b => 'a 'b . (List 'a) * (List 'b)
+zip lists = let (xs, ys) = lists
+            in case unroll [List 'a] xs of
+              Nil -> case unroll [List 'b] ys of
+                Nil -> roll [List ('a * 'b)] Nil,
+                Cons y ys' -> let xdef = def 'a ()
+                                  nil = roll [List 'a] Nil
+                                  lists' = zip 'a 'b (nil, ys')
+                              in roll [List ('a * 'b)] (Cons (xdef, y) lists')
+                esac,
+              Cons x xs' -> case unroll [List 'b] ys of
+                Nil -> let ydef = def 'b ()
+                           nil = roll [List 'b] Nil
+                           lists' = zip 'a 'b (xs', nil)
+                       in roll [List ('a * 'b)] (Cons (x, ydef) lists'),
+                Cons y ys' -> let lists' = zip 'a 'b (xs', ys')
+                              in roll [List ('a * 'b)] (Cons (x, y) lists')
+                esac
+            esac
+
+unzip :: Default 'a, Default 'b => 'a 'b . List ('a * 'b)
+unzip lists = zip! 'a 'b lists

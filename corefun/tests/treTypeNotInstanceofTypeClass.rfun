@@ -1,0 +1,11 @@
+----
+--
+-- Program fails tranformation as Nat is not an instance of Test.
+--
+----
+
+class Test 'a where
+  test => 'a <-> 'a
+
+f :: 1
+f x = test 1 x

@@ -1,0 +1,7 @@
+----
+--
+-- Program fails typecheck as dynamic value is not used.
+--
+----
+
+f (x:1) = let (y, z) = x in (y, z)

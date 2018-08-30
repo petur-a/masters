@@ -1,0 +1,10 @@
+----
+--
+-- Program fails typecheck as a unroll is over a non-recursive expression.
+--
+----
+
+type Nat = Null | Succ Nat
+
+f :: 1
+f n = unroll [List Nat] n

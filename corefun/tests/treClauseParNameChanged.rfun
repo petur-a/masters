@@ -1,0 +1,12 @@
+----
+--
+-- Program fails tranformation as the name of a parameter is different between
+-- clauses.
+--
+----
+
+type Either 'a 'b = Left 'a | Right 'b
+
+f :: 'a 'b . 1 -> Either 'a 'b
+f n1 (Left x)  = Left x
+f n2 (Right x) = Right x

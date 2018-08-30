@@ -1,0 +1,413 @@
+%-------------------------------------------------------------------------------
+% PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
+%-------------------------------------------------------------------------------
+
+\documentclass[a4paper,10p,openright]{memoir}
+
+\usepackage{dikuReport}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{latexsym}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{extramarks}
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{courier}
+\usepackage{lipsum}
+\usepackage{tabularx}
+\usepackage{mathtools}
+\usepackage{mathrsfs}
+\usepackage{tikz}
+\usepackage{lstrfun}
+\usepackage{xspace}
+\usepackage{cite}
+\usepackage{microtype}
+\usepackage{caption}
+\usepackage{todonotes}
+\usepackage{subcaption}
+\usepackage{url}
+\usepackage{stmaryrd}
+\usepackage{ebproof}
+\usepackage{xcolor,calc}
+\usepackage{float}
+\usepackage{morefloats}
+\usepackage{latexsym}
+\usepackage{fix-cm}
+\usepackage{pdfpages}
+\usepackage{amsbsy}
+\usepackage{alltt}
+\usepackage{relsize}
+\usepackage{ifthen}
+\usepackage[]{units}
+\usepackage{hyperref}
+
+% Include some layout setup.
+\input{layout.tex}
+
+\def\UrlFont{\rmfamily}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}{Corollary}
+\newtheorem{lemma}{Lemma}
+\newtheorem{definition}{Definition}
+
+% Margins
+% \setlength{\marginparwidth}{2.75cm}
+\topmargin=0in
+\evensidemargin=0.0in
+\oddsidemargin=0.0in
+\textwidth=6.2in
+\textheight=8.5in
+\headsep=0.35in
+
+% \makeatletter
+% \renewcommand\chapter{\if@openright\cleardoublepage\else\clearpage\fi
+%                     \thispagestyle{fancy}
+%                     \global\@topnum\z@
+%                     \@afterindentfalse
+%                     \secdef\@chapter\@schapter}
+% \makeatother
+
+\linespread{1.1} % Line spacing
+
+% Set up the header and footer
+% \pagestyle{fancy}
+% \lhead{} % Top left header
+% \chead{}
+% \rhead{} % Top right header
+% \lfoot{\lastxmark} % Bottom left footer
+% \cfoot{} % Bottom center footer
+% \rfoot{Page\ \thepage} % Bottom right footer
+% \renewcommand\headrulewidth{0pt} % Size of the header rule
+% \renewcommand\footrulewidth{0.4pt} % Size of the footer rule
+
+% \setlength\parindent{0pt} % Removes all indentation from paragraphs
+
+\tikzset{node distance=2cm, auto}
+
+\lstset{language=RFun}
+
+\newcommand*{\anddot}{%
+  \mathclose{}%
+  \nonscript\mskip.5\thinmuskip
+  \boldsymbol{.}%
+  \;%
+  \mathopen{}%
+}
+
+\def\rfunc{\ensuremath{\mathsf{CoreFun}}\xspace}
+% \def\rfunfst{\ensuremath{\mathsf{RFun}_{fst}}\xspace}
+\def\rfun{\ensuremath{\mathsf{RFun}}\xspace}
+
+%-------------------------------------------------------------------------------
+% SEMANTICS COMMANDS
+%-------------------------------------------------------------------------------
+
+% Environments
+\newcommand{\cod}{\text{cod}}
+\newcommand{\dom}{\text{dom}}
+\newcommand{\Hom}{\text{Hom}}
+
+\newcommand{\leaves}{\text{leaves}}
+\newcommand{\sfmp}{\text{staticFMP}}
+\newcommand{\PLVal}{\text{PLVal}}
+
+\def\vdashe{\vdash}
+\def\vdashd{\vdash\!\!\!\vdash}
+\newcommand{\con}{\Sigma;\Gamma\vdash}
+\newcommand{\conp}{\Sigma;\Gamma'\vdash}
+\newcommand{\conpp}{\Sigma;\Gamma''\vdash}
+\newcommand{\conemp}{\Sigma;\emptyset\vdash}
+\newcommand{\concup}{\Sigma;\Gamma\cup\Gamma'\vdash}
+\newcommand{\concupp}{\Sigma;\Gamma\cup\Gamma''\vdash}
+\newcommand{\pcon}{p \vdash}
+\newcommand{\storeinv}{p;\sigma\vdash^{-1}}
+\newcommand{\emptyinv}{p;\emptyset\vdash^{-1}}
+
+\newcommand{\dcon}{\Delta\vdash}
+
+% Constructs
+\newcommand{\inl}[1]{\textbf{inl}(#1)}
+\newcommand{\inr}[1]{\textbf{inr}(#1)}
+
+\newcommand{\lett}[3]{\textbf{let } #1 = #2 \textbf{ in } #3}
+\newcommand{\caseof}[5]{\textbf{case } #1 \textbf{ of } #2 \Rightarrow #3, #4 \Rightarrow #5}
+\newcommand{\caseofu}[5]{\textbf{case } #1 \textbf{ of } #2 \Rightarrow #3, #4 \Rightarrow #5 \textbf{ unsafe }}
+\newcommand{\caseofs}[6]{\textbf{case } #1 \textbf{ of } #2 \Rightarrow #3, #4 \Rightarrow #5 \textbf{ safe } #6}
+\newcommand{\smpcase}[2]{\textbf{case } #1 \textbf{ of } #2}
+
+\newcommand{\roll}[2]{\textbf{roll } [#1]\ #2}
+\newcommand{\unroll}[2]{\textbf{unroll } [#1]\ #2}
+
+\newcommand{\abort}[2]{\textbf{abort}_#1\ #2}
+
+\newcommand{\class}[2]{\textbf{class } #1 \textbf{ where } #2}
+\newcommand{\instance}[2]{\textbf{instance } #1 \textbf{ where } #2}
+
+\newcommand{\within}[2]{\textbf{within } #1 : #2 \textbf{ end}}
+
+\newcommand{\defeq}{\stackrel{\>\text{def}}{=}\>}
+
+\begin{document}
+
+%-------------------------------------------------------------------------------
+% TITLE PAGE
+%-------------------------------------------------------------------------------
+
+% Basic information
+\thesistype{MSc thesis}
+\thesiscomment{} % You can leave this blank
+\title{Design of a Reversible Functional Programming Language}
+\subtitle{And its Type System}
+\author{Petur Andrias Højgaard Jacobsen}
+\cosupervisor{Robin Kaarsgaard Jensen}
+\supervisor{Michael Kirkedal Thomsen}
+\date{\today} % Hand-in date
+%\subject{The short description that is suitable for a database.} % This is not needed.
+
+% Make the front page, title page, and other required information.
+\pagestyle{plain}
+\maketitle
+
+% Start at page 3. I do not count the front page in the numbering.
+\cleardoublepage
+\pagenumbering{roman}
+\setcounter{page}{3}
+
+\cleardoublepage
+\pagestyle{plain}
+
+%-------------------------------------------------------------------------------
+
+\begin{abstract}
+
+  Reversible programming languages are languages which exhibit both forward and
+  backward determinism. The theory of reversible flowchart languages is
+  relatively well understood, but studies of reversible functional languages
+  are few and far between. In this thesis, we introduce a garbage-free,
+  reversible, function language, inspired by \rfun, which we call \rfunc. We
+  provide a formalization of its semantics and extend it with a type system
+  based on relevance logic. The type system also has support for recursive and
+  polymorphic types. With the type system, we are able to add the use of
+  ancillae variables through an unrestricted fragment. Backwards determinism of
+  of branching is achieved with a First Match Policy, but we investigate the
+  possibility of ensuring backwards determinism with exit assertions or static
+  guarantees of orthogonality as alternatives. As program inversion of
+  non-flowchart languages generally is hard, we present a formalization of its
+  inverse semantics instead. Finally, we describe how to lift the core language
+  into a syntactically lighter language via a sequence of translation schemes,
+  making it more amenable for modern style programming.
+
+\end{abstract}
+
+% Table of contents
+\cleardoublepage
+\chapterstyle{combined}
+\tableofcontents*
+
+% Starting the real text.
+\cleardoublepage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+%-------------------------------------------------------------------------------
+
+\chapter{Introduction}
+
+Reversible computing is the study of computational models in which individual
+computation steps can be uniquely and unambiguously inverted. For programming
+languages, this means languages in which programs can be run \emph{backward}
+and get a unique result (the exact input). In this thesis, we restrict ourselves
+to \emph{garbage-free} reversible programming languages, which guarantee not
+only that all programs are reversible, but also that no hidden duplication of
+data is required in order to make this guarantee.
+
+In this thesis, we present a simple, but \emph{r-Turing
+complete}~\cite{AxelsenGlueck:2016}, reversible typed functional programming
+language, \rfunc. Functional languages and programming constructs are currently
+quite successful; this includes both applications in special domains, e.g.
+Erlang, and functional constructs introduced in mainstream programming
+languages, such as Java and C++. We believe that functional languages also
+provide a suitable environment for studying reversible programs and
+computations, as recently shown in~\cite{ThomsenAxelsen:2016:IFL}. However, the
+lack of a type system exposed the limitations of the original \rfun language,
+which has motivated this work. A carefully designed type system can provide
+better handling of static information through the introduction of
+\emph{ancillae typed} variables, which are guaranteed to be unchanged across
+function calls. Further, it can often be used to statically verify the
+\emph{first match policy} that is essential to reversibility of partially
+defined functions. It should be noted that this type system is not meant to
+guarantee reversibility of well-typed programs (rather, guaranteeing
+reversibility is a job for the \emph{semantics}). Instead, the type system aids
+in the clarity of expression for programs, provides fundamental
+well-behavedness guarantees, and is a source of additional static information
+which can enable static checking of certain properties, such as the
+aforementioned \emph{first-match policy}.
+
+An implementation of the work in this thesis can be found at:
+
+\begin{center}
+  \texttt{\url{https://github.com/diku-dk/coreFun/}}
+\end{center}
+
+\section{Background}
+
+Initial studies of reversible (or information lossless) computation date back
+to the years around 1960. These studies were based on quite different
+computation models and motivations: Huffman studied information lossless finite
+state machines for their applications in data transmission~\cite{Huffman:1959},
+Landauer came to study reversible logic in his quest to determine the sources
+of energy dissipation in a computing system~\cite{Landauer:1961}, and Lecerf
+studied reversible Turing machines for their theoretical
+properties~\cite{Lecerf:1963}.
+
+Although the field is often motivated by a desire for energy and entropy
+preservation though the work of Landauer~\cite{Landauer:1961}, we are more
+interested in the possibility to use reversibility as a property that can aid
+in the execution of a system, an approach which can be credited to
+Huffman~\cite{Huffman:1959}. It has since been used in areas like programming
+languages for quantum computation~\cite{GreenEtAl:2013:Quip}, parallel
+computing~\cite{SchordanEtal:2015:RC}, and even
+robotics~\cite{SchultzLEA:2015}. This diversity motivates studying reversible
+functional programming (and other paradigms) independently, such that we can
+get a better understanding of how to improve reversible programming in these
+diverse areas.
+
+The earliest reversible programming language (to the authors' knowledge) is
+Janus, an imperative language invented in the 1980's, and later
+rediscovered~\cite{LutzDerby:1986,YokoyamaGlueck:2007:Janus} as interest in
+reversible computation spread. Janus and languages deriving from it have
+since been studied in detail, so that we today have a reasonably good
+understanding of these kinds of reversible flowchart
+languages~\cite{YokoyamaEtAl:2015,GlueckKaarsgaard:2018}.
+
+Reversible functional programming languages are still at an early stage of
+development, and today only a few proof-of-concept languages exist. This work
+is founded on the initial work on
+\rfun~\cite{YokoyamaAxelsenGlueck:2012:LNCS,ThomsenAxelsen:2016:IFL}, while
+another notable example of a reversible functional language is
+Theseus~\cite{JamesSabry:2014:RC}, which has recently been further developed
+towards a language for quantum computations~\cite{SabryEtal:2018}.
+
+%% Linear types
+
+The type system formulated here is based on relevance logic (originally
+introduced in \cite{Anderson:1975}, see also \cite{Dunn:2002}), a substructural
+logic similar to linear logic~\cite{Girard:1987,Wadler:1990} which (unlike
+linear logic) permits the duplication of data. In reversible functional
+programming, linear type systems (see e.g.~\cite{JamesSabry:2014:RC}) have
+played an important role in ensuring reversibility, but they also appear in
+modern languages like the Rust programming language~\cite{Matsakis:2014}. To
+support ancillary variables at the type level, we adapt a type system inspired
+by Polakow's combined reasoning system of ordered, linear, and unrestricted
+intuitionistic logic~\cite{Polakow:2001}.
+
+The rest of this thesis is organised in the following way: In
+Sect.~\ref{sec:formal} we will first introduce \rfunc followed by the type
+system and operational semantics. We also discuss type polymorphism and show
+that the language is indeed reversible. In Sect.~\ref{sec:staticFMP} we will
+show how the type system in some cases can be used to statically verify the
+first match policy. In Sect.~\ref{sec:running_backwards} we discuss program
+inversion and present inverse operational semantics. Sect.~\ref{sec:prog} we
+show how syntactic sugar can be used to design a more modern style functional
+language from \rfunc. In Sect.~\ref{sec:implementation} we briefly introduce a
+reference implementation. In Sect.~\ref{sec:discussion} we discuss language
+design and future work. Finally in Sect.~\ref{sec:conclusion} we conclude.
+
+%-------------------------------------------------------------------------------
+% LANGUAGE
+%-------------------------------------------------------------------------------
+
+\input{language}
+
+%-------------------------------------------------------------------------------
+% FIRST MATCH GUARANTEE
+%-------------------------------------------------------------------------------
+
+\input{firstmatch}
+
+%-------------------------------------------------------------------------------
+% INVERSE
+%-------------------------------------------------------------------------------
+
+\input{inverse}
+
+%-------------------------------------------------------------------------------
+% PROGRAMMING
+%-------------------------------------------------------------------------------
+
+\input{programming}
+
+%-------------------------------------------------------------------------------
+% IMPLEMENTATION
+%-------------------------------------------------------------------------------
+
+\input{implementation}
+
+%-------------------------------------------------------------------------------
+% DISCUSSION
+%-------------------------------------------------------------------------------
+
+\input{discussion}
+
+%-------------------------------------------------------------------------------
+% CONCLUSION
+%-------------------------------------------------------------------------------
+
+\chapter{Conclusion}\label{sec:conclusion}
+
+Although \rfunc is a continuation of the work that was started with \rfun, its
+abstract syntax and evaluation semantics are quite different and include more
+explicit primitive language constructs. However, we have also shown that
+\rfunc can be made lighter via syntactic sugar to mimic other functional
+languages.
+
+We have presented a formal type system for \rfunc, including support for
+recursive types through a fix point operator and polymorphic types via
+parametric polymorphism. The type system is built on relevance typing, which is
+sufficient for reversibility if we accept that functions may be partial.
+
+Evaluation has been presented through a big step semantics. Most evaluation
+rules were straightforward, but it was necessary to define a notion of leaves
+and a relation for ``unification'' as machinery to describe the side condition
+necessary to capture the first match policy.
+
+An advantage offered by the type system is the ability to check the first match
+policy statically. A static guarantee that the first match policy should hold
+for a function will eliminate the run time overhead of case-expressions, often
+leading to more efficient evaluation. By the program syntax, we can check for
+orthogonality of inputs and the possible values of leaf expressions. By the
+type system, we can argue for the finiteness of a function's domain and exhaust
+the possible computational paths for a case-expression. Further, as was shown
+in future work, we can apply an induction principle for recursive types.
+However, it is difficult to detect exactly when this will yield a first match
+policy guarantee.
+
+We noted that, in contrast to many reversible programming languages, the syntax
+of \rfunc does not easily support generation of inverse programs. This is not
+problematic as the relational semantics do make it possible to inverse
+interpret a program. We presented an inference system for inverse evaluation
+and showed how inverse application of functions is achieved.
+
+Finally, we have argued that it is possible to enhance the syntax of \rfunc
+with high level constructs, which in turn have simple translation schemes back
+to the core language. We have presented numerous examples: variants, type
+classes (which, as an example, can be used to replace the duplication/equality
+operator in the original \rfun language), top-level cases, records, arbitrarily
+sized products and abbreviated let-expressions.
+
+%-------------------------------------------------------------------------------
+% BIBLIOGRAPHY
+%-------------------------------------------------------------------------------
+
+\bibliographystyle{splncs03}
+\bibliography{references}
+
+\end{document}

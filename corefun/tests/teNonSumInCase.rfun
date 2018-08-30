@@ -1,0 +1,11 @@
+----
+--
+-- Program fails typechecking as the expression cased over is not of a sum type
+--
+----
+
+f :: 'a . 'a
+f x = case () of
+    inl(()) -> inl(x),
+    inr(()) -> inr(x)
+  esac

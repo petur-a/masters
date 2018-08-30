@@ -1,0 +1,68 @@
+(+) :: Integer -> Integer <-> Integer
+(+) x y = x + y
+
+(-) :: Integer -> Integer <-> Integer
+(-) x y = x +! y
+
+(*) :: Integer -> Integer <-> Integer
+(*) x y = x * y
+
+(/) :: Integer -> Integer <-> Integer
+(/) x y = x *! y
+
+(%) :: Integer -> Integer <-> Integer
+(%) x y = x % y
+
+2 + 3 -> (2, 2+3)
+2 +! 5 -> (2, 5-2)
+
+2 - 3 -> (2, 2-3)
+2 !- (-1) -> (2, (-1)-2)
+
+(++) :: [a] -> [a] <-> [a]
+(++) _ ys = ys
+(++) (x:xs) ys = let cx = xs ++ ys in (x:cx)
+
+(++)! _ ys = ys
+(++)! (x:xs) ys = let (x:cx) = xs !++ ys in cx
+
+[1,2] ++ [3,4] -> ([1,2], [1,2,3,4])
+[1,2] !++ [1,2,3,4] -> ([1,2], [3,4])
+
+(++) run with [1,2] [3,4]:
+[1,2] ++ [3,4] = let cx = [2] ++ [3,4] in (1:cx)
+[2] ++ [3,4] = let cx = [] ++ [3,4] in ([]:cx)
+[] ++ [3,4] = [3,4]
+[2] ++ [3,4] = [2,3,4]
+[1,2] ++ [3,4] = [1,2,3,4]
+
+And the inverse:
+[1,2] !++ [1,2,3,4] = let cx = xs !++ ys in 
+
+fib :: Integer <-> (Integer, Integer)
+fib 0 = (1, 1)
+fib n =
+  let (x, y) = fib (n-1)
+      y' = x + y
+  in (y', x)
+
+fib run with 3, should return (5, 3):
+fib 3: let (x, y) = fib 2
+fib 2: let (x, y) = fib 1
+fib 1: let (x, y) = fib 0
+fib 0 = (1,1)
+fib 1: 2 = 1 + 1 in (2, 1)
+fib 2: 3 = 2 + 1 in (3, 2)
+fib 3: 5 = 3 + 2 in (5, 3)
+
+Now inverse, should return 3:
+fib(5, 3)! = let 2 = 5 - 3
+            n = !fib(3, 2)
+fib(3, 2)! = let 1 = 3 - 2
+            n = !fib(2, 1)
+fib(2, 1)! = let 1 = 2 - 1
+            0 = !fib(1, 1)
+fib(2, 1)! = 0 in (0+1) in 1
+fib(3, 2)! = 2 in (1+1) in 2
+fib(5, 3)! = 2 in (2+1) in 3
+

@@ -1,0 +1,29 @@
+type Bool = True | False
+
+type Nat = Null | Succ Nat
+
+type Eq 'a = Eq | Neq 'a
+
+class Eq 'a where
+  eq => 'a -> 'a <-> Eq 'a
+
+instance Eq Nat where
+  eq n0 n1 => eqNat n0 n1
+
+inc :: Nat
+inc n = roll [Nat] (Succ n)
+
+eqNat :: Nat -> Nat
+eqNat n0 n1 = eqNatH (roll [Nat] Null) (roll [Nat] Null) n0 n1
+
+plus :: Nat -> Nat
+plus Null n1 = n1
+plus (Succ n0) n1 = let n' = plus n0 n1
+                    in inc n'
+
+eqNatH :: Nat -> Nat -> Nat -> Nat
+eqNatH n0' n1' Null Null = Eq
+eqNatH n0' n1' (Succ n0) Null = Neq n1'
+eqNatH n0' n1' Null (Succ n0) = let n1'' = plus n1' (roll [Nat] (Succ n0))
+                                in Neq n1''
+eqNatH n0' n1' (Succ n0) (Succ n1) = eqNatH (inc n0') (inc n0') n0 n1

@@ -1,0 +1,12 @@
+----
+--
+-- Program fails typecheck as a unroll is over an roll term of the wrong type
+--
+----
+
+type Nat = Null | Succ Nat
+
+type List 'a = Nil | List 'a
+
+f :: Nat
+f n = unroll [List Nat] (roll [Nat] (Succ n))

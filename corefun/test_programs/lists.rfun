@@ -1,0 +1,47 @@
+length :: [a] -> () <-> Integer
+length [] () = 0
+length (x:xs) () = let n = length xs () in n+1
+
+head :: [a] -> () <-> a
+head (x:xs) () = x
+
+last :: [a] -> () <-> a
+last [x] ()  = x
+last (x:xs) () = let l = last xs in l end
+
+init :: [a] -> () <-> [a]
+init [x] () = []
+init (x:xs) () = x:(init xs)
+
+tail :: [a] -> () <-> [a]
+tail (x:xs) () = xs
+
+empty :: [a] -> () <-> Bool
+empty [] () = True
+empty _  () = False
+
+zip :: [a] -> [b] <-> [(a, b)]
+zip [] [] = []
+zip (x:xs) (y:ys) = let zs = zip xs ys in ((x, y):zx) end
+
+map :: (a <-> b) -> [a] <-> [b]
+map f [] = []
+map f (x:xs) = let x' = f x in x' : (map f xs) end
+
+foldl :: (a -> b <-> b) -> [a] -> b <-> b
+foldl _ [] acc = acc
+foldl f (x:xs) acc = let acc' = f x acc in foldl f acc' xs end
+
+filter :: (a -> () <-> Bool) -> [a] -> () <-> [a]
+filter f [] () = []
+filter f (x:xs) () =
+  let p = fx
+  in case p of
+       False -> filter f xs ()
+       True  -> let fs' = filter f xs () in (x:fs')
+     end
+  end
+
+reverse :: [a] <-> [a]
+reverse [] = []
+reverse (x:xs) = let xs' = reverse xs in xs' ++ [x] end

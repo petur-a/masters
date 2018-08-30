@@ -1,0 +1,17 @@
+flags: {}
+
+packages:
+- .
+
+extra-deps: [
+    Cabal-1.24.2.0
+  , base-4.9.1.0
+  , cabal-helper-0.7.3.0
+  , extra-1.5.3
+  , monad-journal-0.7.2
+  , optparse-applicative-0.13.2.0
+  , process-1.4.3.0
+  , either-4.4.1.1
+]
+
+resolver: lts-10.7

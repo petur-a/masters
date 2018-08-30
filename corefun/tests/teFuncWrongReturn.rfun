@@ -1,0 +1,12 @@
+----
+--
+-- Program fails typecheck as the return type of f is 1, but g treats it as a
+-- product.
+--
+----
+
+f :: 1
+f x = x
+
+g :: 1
+g x = let (y, z) = f x in (y, z)

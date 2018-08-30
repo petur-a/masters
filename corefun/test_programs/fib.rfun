@@ -1,0 +1,12 @@
+plus :: Nat -> Nat <-> Nat
+plus Z    x = x
+plus S(y) x =
+  let x' = plus y x
+  in S(x')
+
+fib :: Nat <-> (Nat, Nat)
+fib Z    = (S(Z), S(Z))
+fib S(m) =
+  let (x, y) = fib m
+      y' = plus x y
+  in (y', x)

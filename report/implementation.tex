@@ -1,0 +1,321 @@
+\chapter{Implementation}\label{sec:implementation}
+
+The language described in the work has been implemented in Haskell as a
+reference implementation. It includes parsers for both the core and light
+grammars, a typechecker implementing the base type system from
+Sect.~\ref{sec:formal} including every extension showed later, an interpreter
+implementing the big step operational semantics, an inverse interpreter
+implementing the inverse semantics, a first match policy analyzer and a
+transpiler transforming a light program into the core program.
+
+The implementation involves a number of monads, specifically a Reader, Writer,
+State and Error monad. Details on these can be found in~\cite{Jones:1995}. We
+also employ a monadic parser combinatoric approach via the \texttt{megaparsec}
+library. An introduction to monadic parsing in Haskell can be found
+in~\cite{Hutton:1998}.
+
+In the following we will discuss various details about the implementation,
+including ways in which the implementation diverges from the theoretic
+description.
+
+\section{Parsing}
+
+We implement two parsers and maintain two abstract syntax trees: one for the
+light language and one for the core language. Both languages are indentation
+oblivious but white space sensitive to some extent. Specifically, we allow line
+breaks only under certain conditions. Canonical terms and applications must be
+retained on the same line while case expressions recognize branches on separate
+lines and let-expressions allow the binding $l = e_1$ be separated from the
+body $e_2$, so we can write:
+
+\begin{rfuncode}
+case $x$ of
+  inl($y$) -> y,
+  inr($z$) -> z
+
+let $x$ = $e$
+in $e$
+\end{rfuncode}
+
+In the core language, parsing case-expressions is deterministic without white
+space sensitivity or explicit delimitation of the expression. This is because
+we know we have to account for exactly two branches and each left hand side is
+uniquely given. In the light language, we do not have this insurance as a
+case-expression may involve any number of branches and their left hand side is
+unrestricted. Consider the program in Fig.~\ref{fig:ambiguous_parsing}.
+
+\begin{figure}[ht!]
+  \centering
+  \begin{subfigure}[b]{0.49\textwidth}
+    \begin{rfuncode}
+           case $x$ of
+             v1 -> case v1 of
+                     v11 -> v11,
+                     v12 -> v12,
+                     v13 -> v13,
+             v2 -> case v2 of
+                     v21 -> v21,
+                     v22 -> v22
+    \end{rfuncode}
+  \caption{}
+  \end{subfigure}
+~
+  \begin{subfigure}[b]{0.49\textwidth}
+    \begin{rfuncode}
+        case $x$ of
+          v1 -> case v1 of
+                  v11 -> v11,
+                  v12 -> v12,
+                  v13 -> v13,
+                  v2  -> case v2 of
+                           v21 -> v21,
+                           v22 -> v22
+    \end{rfuncode}
+  \caption{}
+  \end{subfigure}
+  \caption{Ambiguous program.}\label{fig:ambiguous_parsing}
+\end{figure}
+
+Note the comma of $\texttt{v13} \rightarrow \texttt{v13,}$ on line 5. In
+subfigure (a) the indentation levels seem to indicate that the first inner
+case-expression only has three alternatives --- so the comma delimits the two
+outer branches, and we can begin to parse the second arm $\texttt{v2}
+\rightarrow \dots$. But the meaning is ambiguous: It can also be parsed to mean
+that the case-expression in the first inner branch has another alternative,
+which is the natural interpretation in subfigure (b).
+
+Capturing the correct meaning requires indentation sensitiveness, which we do
+not implement. Therefore we delimit a light case expression with an additional
+\textbf{esac} to erase this ambiguousness. We rewrite the case-expression from
+Fig.~\ref{fig:ambiguous_parsing} as:
+
+\begin{rfuncode}
+case $x$ of
+  v1 -> case v1 of
+          v11 -> v11,
+          v12 -> v12,
+          v13 -> v13
+        esac,
+  v2 -> case v2 of
+          v21 -> v21,
+          v22 -> v22
+        esac
+  esac
+\end{rfuncode}
+
+\section{Typechecking}
+
+The typechecker employs the State monad to maintain the set of hypotheses,
+mapping types to variables. We partition the hypotheses into a static and
+dynamic fragment to reflect $\Gamma$ and $\Sigma$. Without loss of correctness
+we deviate slightly from the typing judgement by storing function signatures in
+its own environment in the form of a Reader monad. The Error monad ensures that
+when any error has been encountered, it will propagate to the top typechecker
+entry point with a designated error message. This choice of error handling
+promises that the first and only the first error encountered will be brought to
+attention --- there is no tally of type errors.
+
+Contrary to what is assumed in the type rules --- where the type signature
+$\tau_f \rightarrow \dots \rightarrow \tau \leftrightarrow \tau$ of a function
+is assumed to be fully known at the time of typing --- the return type of
+functions is not known initially in the implementation. Obligatory annotations
+of types of parameters ensure that we know every parameter type, but we will
+have to infer return types. For this we heed to \emph{constraint solving}. We
+define a special kind of type variable called a \emph{unification variable},
+denoted $\{i\}$, where $i$ is the identity of a particular unification
+variable. The informal idea is to find the most general form of each
+unification variable by inspection of how they are used in each function body
+expression. A fresh unification variable is introduced for each expression we
+do not immediately know the full type of. In the present language, unknown
+types occur solely by function applications and by sum term. Specifically,
+$\inl{e}$ is typed as $\tau + \{i'\}$ where $i'$ is a fresh unification
+variable and $\con e : \tau$.  Symmetrically we have $\inr{e}$ as $\{i'\} +
+\tau$. Further, each function name $f$ also omits a unique unification variable
+$\{f\}$, meaning every function application types as $\{f\}$.
+
+A constraint on a unification variable $\{i\}$ is produced whenever we learn
+anything about $\{i\}$ by how an expression $e : \{i\}$ is subsequently
+treated, which might generate new \emph{unification variables}. Exemplary cases
+are:
+
+\begin{align*}
+  &\lett{(x, y)}{e : \{i\}}{e'} & \text{Cons}(i = i' \times i'') \text{ with $x : \{i'\}$, $y : \{i''\}$} \\
+  &\caseof{e : \{i\}}{\inl{x}}{e'}{\inr{y}}{e''} & \text{Cons}(i = i' + i'') \text{ with $x : \{i'\}$, $y : \{i''\}$} \\
+\end{align*}
+
+Each constraint is remarked in a global record of constraints. After the type
+of each function $f \in p$ has been deduced, we know that every constraint has
+been produced for $p$. For constraint solving to succeed, no two constraints
+may be in direct contradiction. In the reference implementation we use the
+Writer monad to transcribe constraints during typing, and solve them as a
+subsequent operation to typing.
+
+\section{Interpretation and Static Analysis}
+
+The implementation of forward interpretation is rather straightforward --- it
+is implemented basically as presented in the big step semantics. It employs the
+Reader monad to represent $p$, the storage of function definitions. No state is
+needed as mappings between variables and values is achieved through
+substitution. We expect every program to be well typed. This specifically means
+that the only run-time error which \emph{should} occur is a failure of the
+\textsc{Case-R} side condition --- in this case, an error is evoked via the
+Error monad.
+
+Inverse interpretation introduces a state monad in addition to $p$,
+representing the store $\sigma$ as seen in the inverse big step judgement. A
+simple first match policy analyser implementation is also made available.
+
+\section{Transformation}
+
+Transformations are performed serially in a pipeline fashion. In theory,
+transformations in Sect.~\ref{sec:prog} are (in almost all cases) defined so
+that each transformation is layered directly on top of the core language,
+something which is not feasible when they are all combined into one grammar.
+The exception to the rule is the transformation of guards, which are defined on
+top of a top-level function case. The reference implementation takes some
+liberties on this front and constructs the transformations on top of each
+other to simplify the implementation, while keeping true to the semantics of
+each. The order of transformations is:
+
+\begin{align*}
+  tProducts \circ tLetIns \circ tVariants \circ tTopFunc \circ tGuards \circ tTypeClasses
+\end{align*}
+
+We do not implement the translation of records, and thus do not support them in
+the reference implementation. The reason is that the translation scheme for
+records exploits that we know the full type signatures of functions to unpack
+record values. But we have seen how we need to infer return types via
+typechecking in the reference implementation. Ultimately, we cannot typecheck a
+program until after transformations have been applied but we apply a
+transformation for records until we know the return type of each function. A
+workaround would be to allow the programmer to to add return type annotations
+to each function signature.
+
+\subsection{Typechecking of Light Programs}
+
+There is a balance to be struck regarding the extent to which the
+implementation should validate the non-transformed program. A good rule of
+thumb is to attempt to perform the translation as long as the transformation
+rules are possible to apply --- in the most rudimentary interpretation, we at
+least have to take the precautions addressed in the main text on
+transformations into account.
+
+An open issue regarding typechecking a light program is the tackling the
+presentation of cryptic error messages which will be encountered when there is
+an error during typechecking of a transformation program. If the transformation
+is not stateful in a way such that the original program text is preserved and
+accessed when an error happens, the error will not reflect what the programmer
+wrote at all. This has been left as future work.
+
+\subsection{Transformation Example}
+
+As an example, we present a reversible zip function $\texttt{zip} ::
+\alpha~\beta .~[\alpha] * [\beta] \rightarrow [\alpha * \beta]$ (with $[\cdot]$
+being the usual shorthand for lists) actually translated by the reference
+implementation. \texttt{zip} is a non-trivial example of an \rfunc function, as
+we have to decide the behaviour when the lists are of uneven size. We cannot
+omit the clauses as the case-expressions need to be total and we cannot throw
+away excess values from the longer list. What we do instead is constrict the
+function to lists of types which instantiate the \texttt{Default} type class
+--- types for which we can define default values. The smaller list is then
+padded until it has the same length as the longer list. An example for lists of
+natural numbers, where the default value is 0:
+
+\begin{align*}
+  \texttt{zip}~[1, 2, 3, 4]~[5,6] = [(1, 5), (2, 6), (3, 0), (4, 0)]
+\end{align*}
+
+The original program can be seen in Fig.~\ref{fig:example_light} and the
+generated core program can be seen in Fig.~\ref{fig:example_transformed}. We
+have added line breaks and white spaces in the presentation of the transformed
+program where appropriate, to make the structure of the program more clear.
+Note that the presentation breaks the parser's rules regarding white spaces, so
+it is only exemplary. Also note that the transformation breaks the naming
+convention of every class of fresh variables it generates. These variable names
+are well formed as a program, but cannot be parsed! This is a simple method of
+ensuring uniqueness of new variables.
+
+\begin{figure}[ht!]
+  \begin{rfuncode}
+type Nat = Null | Succ Nat
+type List 'a = Nil | Cons 'a (List 'a)
+
+class Default 'a where
+  def => 1 <-> 'a
+instance Default Nat where
+  def u => roll [Nat] Null
+
+zip :: Default 'a, Default 'b => 'a 'b . (List 'a) * (List 'b)
+zip ls = let (xs, ys) = ls
+            in case unroll [List 'a] xs of
+              Nil -> case unroll [List 'b] ys of
+                Nil -> roll [List ('a * 'b)] Nil,
+                Cons y ys' -> let xdef = def 'a ()
+                                  nil = roll [List 'a] Nil
+                                  ls' = zip 'a 'b (nil, ys')
+                              in roll [List ('a * 'b)] (Cons (xdef, y) ls')
+                esac,
+              Cons x xs' -> case unroll [List 'b] ys of
+                Nil -> let ydef = def 'b ()
+                           nil = roll [List 'b] Nil
+                           ls' = zip 'a 'b (nil, xs')
+                       in roll [List ('a * 'b)] (Cons (x, ydef) ls'),
+                Cons y ys' -> let ls' = zip 'a 'b (xs', ys')
+                              in roll [List ('a * 'b)] (Cons (x, y) ls')
+                esac
+            esac
+
+unzip :: Default 'a, Default 'b => 'a 'b . List ('a * 'b)
+unzip ls = zip! 'a 'b ls
+  \end{rfuncode}
+  \caption{A reversible \texttt{zip} program written in the light
+  language.}\label{fig:example_light}
+\end{figure}
+
+\begin{figure}[ht!]
+  \begin{rfuncode}
+__zipNatNat  (ls:(\A . (1 + (\B . (1 + B) * A)) * \A . (1 + (\B . (1 + B) * A)))) =
+  let (xs, ys) = ls
+  in case unroll [\A . (1 + (\B . (1 + B) * A))] xs of
+    inl(()) -> case unroll [\A . (1 + (\B . (1 + B) * A))] ys of
+      inl(()) -> roll [\A . (1 + ((\B . (1 + B) * \B . (1 + B)) * A))] inl(()),
+      inr(_a) ->
+        let (y, ys') = _a
+        in let xdef = __defNat ()
+        in let nil = roll [\A . (1 + (\B . (1 + B) * A))] inl(())
+        in let ls' = __zipNatNat (nil, ys')
+        in roll [\A . (1 + ((\B . (1 + B) * \B . (1 + B)) * A))] inr(((xdef, y), ls')),
+    inr(_a) ->
+      let (x, xs') = _a
+      in case unroll [\A . (1 + (\B . (1 + B) * A))] ys of
+        inl(()) ->
+          let ydef = __defNat  ()
+          in let = nil roll [\A . (1 + (\B . (1 + B) * A))] inl(())
+          in let = ls' __zipNatNat  (nil, xs')
+          in roll [\A . (1 + ((\B . (1 + B) * \B . (1 + B)) * A))] inr(((x, ydef), ls')),
+        inr(_b) ->
+          let (y, ys') = _b
+          in let = ls' __zipNatNat  (xs', ys')
+          in roll [\A . (1 + ((\B . (1 + B) * \B . (1 + B)) * A))] inr(((x, y), ls'))
+
+__unzipNatNat  (ls:\A . (1 + ((\B . (1 + B) * \B . (1 + B)) * A))) =
+  __zipNatNat!  ls
+
+__defNat  (u:1) = roll [\A . (1 + A)] inl(())
+  \end{rfuncode}
+  \caption{The reversible \texttt{zip} function from
+  Fig.~\ref{fig:example_light} transformed by the reference
+  implementation.}\label{fig:example_transformed}
+\end{figure}
+
+\section{Default Programs and Testing}
+
+Initially, we wished to test the reference solution rigorously with something
+like QuickCheck~\cite{Claessen:2011}, but soon realized that it is hardly
+fitting for highly structured data. Instead, we include a large array of small
+programs which are meant to test the limits of the parser, typechecker,
+interpreter and transformer. Take note that this is a heuristic approach as we
+have not \emph{proven} the correctness of any part of the reference
+implementation. In addition to providing test programs, we include an
+assortment of exemplary program with numerous examples of well formed functions
+over standard data structures like lists and numerals.

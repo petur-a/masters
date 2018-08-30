@@ -1,0 +1,8 @@
+----
+--
+-- Program fails typecheck as dynamic value is not used.
+--
+----
+
+f :: 'a . 'a
+f x = ()

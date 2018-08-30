@@ -1,0 +1,954 @@
+\chapter{Evaluating Backwards}\label{sec:running_backwards}
+
+For any computable function $f : X \rightarrow Y$ and $x$ such that $f(x) = y$,
+we can derive the inverse function $f' : Y \rightarrow X$ such that $f'(y) =
+x$, by simply trying every possible $x \in X$ for $f$ until we find one for
+which $f$ computes $y$. This works as long as $f$ is decidable and is known as
+the Generate-and-test method~\cite{Mccarthy:1956}. It is inherently inefficient
+though, as we need to enumerate all possible values of $x \in X$.
+Alternatively, any program can be made reversible by embedding a trace of
+information that would otherwise be destroyed, restoring enough information so
+as to make any computation injective. A Landauer embedding turns a
+deterministic TM into a two-tape deterministic RTM and the Bennett method turns
+a TM into a three-tape RTM, both describing the same
+problem~\cite{AxelsenGlueck:2011:FoSSaCS, Bennett:1973}. Predictably however,
+multi-tape RTMs converted to 1-tape RTM, are less efficient~\cite{Axelsen:2011}
+than their original counterparts.
+
+The strength of reversible languages lies in their design which enforces
+injectivity of their computable functions. In the context of reversible
+languages, a \emph{program inverter} writes the inverse program $p^{-1}$ from a
+program $p$. Program inversion is \emph{local} if it requires no global
+analysis to perform (syntactic constructs can be inverted locally) and this is
+usually shown by a set of inverters $\mathcal{I}_x, \dots, \mathcal{I}_z$, one
+for each syntactic domain $x, \dots, z$ of the language's grammar. As an
+example, if we were to present program inversion for \rfunc, it would be
+natural to present a program inverter $\mathcal{I}_p$, a function inverter
+$\mathcal{I}_f$ and an expression inverter $\mathcal{I}_e$. A pleasant property
+of program inversion is maintaining the program size and asymptotic complexity.
+
+Unlike some structural reversible languages like Janus, the semantics of \rfunc
+are not trivially locally reversed --- the central issue when presenting a
+program inverter for a language like \rfunc is figuring out how to write
+deterministic control flow for the inverse program. Writing it requires
+``unification'' analysis of the leaves of the whole function structure, which
+is difficult.
+
+General methods have been proposed (some of which were later used to define a
+program inverter for \rfun) for writing program inverters for reversible
+functional languages~\cite{Gluck:2003, Kawabe:2005}, but the existence of both
+an equality/duplication operator and constructor terms as atoms is assumed,
+both of which are omitted from \rfunc.
+
+Instead of presenting a program inverter, inverse evaluation for \rfunc is
+going to rely on dedicated big step inverse semantics, defined over the
+original program's syntax. Although evaluating inverse function calls in Janus
+most often is achieved by calling the inverse function produced by the Janus
+program inverter directly, big step inverse semantics exist for Janus as
+well~\cite{Paolini:2018}.
+
+An interesting observation is that program inversion as a method for
+reversibility is less expressive than the inverse semantics we will present in
+Sect.~\ref{sec:inverse_semantics}. Specifically, we can accommodate duplication
+of data (in the forward direction) in the inverse semantics by the
+\textsc{I-Bind2} rule. Meanwhile, the type system prohibits us from writing the
+inverse program of a function which duplicates data, as we are lacking native
+support for the equality/duplication operator. See:
+
+\begin{align*}
+  \mathcal{I}_f \llbracket (x:\tau) = (x, x) \rrbracket \defeq
+  f^{-1}~(x': \tau \times \tau) = \mathcal{I}_e \llbracket x' \rrbracket
+\end{align*}
+
+How would we translate $\mathcal{I}_e \llbracket x' \rrbracket$? The forward
+program is legal --- we adopted a relevant type system precisely because we
+embraced the partiality of functions, so the forward function may be defined
+while the inverse function may not. Now, the closest program we can produce is:
+
+\begin{align*}
+  \mathcal{I}_f \llbracket (x:\tau) = (x, x) \rrbracket \defeq
+  f^{-1}~(x': \tau \times \tau) = \lett{(x, y)}{x'}{x}
+\end{align*}
+
+Wherein we attempt to destroy $y$ after decomposing the product, as they should
+be equal anyway --- however we may never implicitly assume that the two values
+in the decomposed product should be equal, so the program is not well-formed.
+We say that \rfunc is not \emph{closed under program
+inversion}~\cite{Kaarsgaard:2017} when we cannot produce the inverse program
+from the language's grammar directly.
+
+\section{Supporting Inverse Function Application}
+
+Naturally, the inverse application of a function requires the full extent of
+information which was returned in the forward direction, and since ancillae
+parameters remain constant across application, the same set of values is
+supplied for ancillae parameters in the forward and backward direction. The
+relationship between a function $f$ and its inverse can be described as:
+
+\begin{align}
+  f~a_1 \dots a_n~x = y
+  \Longleftrightarrow f^{-1}~a_1 \dots a_n~y = x
+\end{align}
+
+For typing of a program when inverse function applications are supported, we
+may deduce the type of the inverse function from the static context $\Sigma$,
+which contains the usual set of statically declared functions. The inverse
+function $f^{-1}$ mirrors the type of $f$ but with the type of the dynamic
+parameter $\tau_n$ and the return type $\tau_{out}$ swapped around the
+bidirectional arrow. For example, if a program contains the following function
+$f$, we can deduce the type of $f^{-1}$:
+
+\begin{align}
+  f : \tau_1
+    \rightarrow \dots
+    \rightarrow \tau_{n-1}
+    \rightarrow \tau_n
+    \leftrightarrow \tau_{out}
+  \Longleftrightarrow~f^{-1}: \tau_1
+    \rightarrow \dots
+    \rightarrow \tau_{n-1}
+    \rightarrow \tau_{out}
+    \leftrightarrow \tau_n
+  \label{def:inv_relationship}
+\end{align}
+
+We introduce a new piece of syntax to support inverse applications. We say that
+to apply the inverse of a function, the programmer should append the original
+function name with an exclamation mark. So in the grammar an application
+$f^{-1}~a_1 \dots a_n$ is denoted as $f!~a_1 \dots a_n$. The addition to the
+grammar is highlighted in Fig.~\ref{fig:inverse_call_grammar}.
+
+\begin{figure}[t]
+\begin{tabular}{p{.6\textwidth}l}
+  $e ::=$ \\
+  $\qquad \quad \vdots$ \\
+  $\hspace{1.7em}\mid f!~\alpha^*~e^+$ & \text{Inverse function call} \\
+\end{tabular}
+\caption{Added inverse function call to expressions in the
+grammar.}\label{fig:inverse_call_grammar}
+\end{figure}
+
+\subsection{Typing and Evaluation of Inverse Function
+Applications}\label{sec:inverse_typing_evaluation}
+
+Typing of an inverse application is identical to a regular application, with
+the signature of the inverse function stored in the static context as seen in
+Eq.~\ref{def:inv_relationship}.
+
+The big step rule for  an inverse function application uses the inverse
+semantics defined in Sec.~\ref{sec:inverse_semantics}, with the original
+function stored in $p$ to produce a canonical term, and is presented in
+Fig.~\ref{fig:inverse_call_evaluation}.
+
+\begin{figure}[htp]
+\begin{align*}
+\textsc{E-InvApp: }
+  \dfrac
+    {\begin{array}{ll}
+        p(f) = \alpha_1 \dots \alpha_m~x_1 \dots x_n = e &
+        \pcon e_1 \downarrow c_1 \cdots \pcon e_n \downarrow c_n \\
+        p; \emptyset \vdash^{-1} e[c_1 / x_1, \dots, c_{n-1} / x_{n-1}], c_n \leadsto \sigma &
+        \sigma(x_n) = c
+     \end{array}}
+     {\pcon f!~\alpha_1 \dots \alpha_m~e_1 \dots e_n \downarrow c}
+\end{align*}
+\caption{New big step rules related to inverse application.}\label{fig:inverse_call_evaluation}
+\end{figure}
+
+\section{Inverse Semantics}\label{sec:inverse_semantics}
+
+We now present the inverse big step semantics of \rfunc. The semantics should
+satisfy that, given a function $f$ with body $e$, which is to be run in
+inverse, and a value $c_{out}$, which is the dynamic input to $f^{-1}$, we may
+derive a value $c_{in}$ which was supplied as the dynamic input to $f$ so
+that $f~e_1 \dots e_n~c_{in} = c_{out}$.
+
+Using substitution to assign values to variables in the backwards direction can
+not be achieved directly as for the forward direction, as the dynamic input in
+the backward direction does not have a variable name we can substitute with.
+
+Instead, for the inverse semantics, we keep a store $\sigma$ with mappings of
+the variables to values we have thus far inferred. Continuously throughout
+inverse evaluation we keep a free value $c$ which we want to \emph{bind} over
+an expression. The loose idea is that whenever we happen upon a variable name $x$
+while attempting to bind $c$, we know that $x$ must have been bound to $c$ in
+the forward direction. We define a binding form as:
+
+\begin{align*}
+  \langle e, c \rangle \sigma =
+  \begin{cases}
+    \sigma[x \mapsto c] &\text{If $e \equiv x$} \\
+    \sigma              &\text{If $e \equiv c \equiv ()$} \\
+    \sigma \cup \sigma' &\text{If $e \equiv x$ and $\sigma(x) = e'$ and
+                               $\langle e', c \rangle \sigma = \sigma'$} \\
+    \sigma \cup \sigma' &\text{If $e \equiv \inl{e'}$ and $c \equiv \inl{c'}$ and
+                               $\langle e', c' \rangle = \sigma'$} \\
+                        &\vdots \\
+    \bot                &\text{Undefined otherwise}
+  \end{cases}
+\end{align*}
+
+Thus, the form of $e$ should match the canonical value $c$, which ``retracts''
+$c$ until a variable name is bound. The variable name may have been encountered
+before during inverse evaluation due to relevance. We require that if an
+attempt is made to map a variable which already exists in $\sigma$, the value
+of the previous binding and the free value must be the same. The end result is
+that amongst the values stored in $\sigma$, the input to the forward
+application is assuredly mapped to the name of the dynamic forward parameter.
+
+The first free value we attempt to bind is the value $c_{out}$ applied as the
+dynamic input to the inverse application, and we bind it against the function
+body $e$. We informally review a motivating example of inverse evaluation:
+
+\begin{align}
+  f~(x:\tau) = \lett{y}{()}{(y, x)}
+  \label{prog:inverse_example}
+\end{align}
+
+The input to $f^{-1}$ must be a product of type $1 \times \tau$ (assume $\tau$
+is generic). Say we evaluate $f^{-1}~((), ())$. This gives us an initial free
+value $c = ((), ())$. We will look to bind $c$ to something. The result of
+evaluating a let-expression in the forward direction is an evaluation of $e_2$
+with $e_1$ substituted for $y$, so we first want to inspect $e_2$ in the
+backward direction. Here we see that $e_2 = (x, y)$. By decomposing the
+products against the free value, We attain two binding forms: $\langle x, ()
+\rangle \sigma = \sigma'$ and $\langle y, () \rangle \sigma' = \sigma''$. Thus
+far, we have that $\sigma[x \mapsto (), y \mapsto ()] \Leftrightarrow
+\sigma''$.
+
+Now we move to inverse evaluate $y = ()$. We know that the let-expression
+resulted in an assignment to $y$ in the forward direction and therefore look
+at how $y$ was constructed. Remember that $y$ is in $\sigma$. We indicate that
+$y$ is the new free value we wish to bind (which will immediately be fetched
+from the store, giving us that () actually is the free value) and $e_1$ is the
+expression we attempt to bind $y$ against. In this case, we will obtain the
+binding form $\langle (), () \rangle \sigma$ which does not change $\sigma$.
+Note that the type system ensure that the value for $y$ in most cases will
+follow the syntactic form of what is given as the inverse application input.
+Since we are done, we should have obtained a value for the dynamic parameter
+$x$ which we can directly read from the $\sigma$.
+
+Most of the inverse semantics are presented in
+Fig.~\ref{fig:inverse_semantics}. Because we have a wide array of possible case
+expression forms, we present the inverse semantics of case-expressions on their
+own in Fig.~\ref{fig:inverse_semantics_cases}. In the following we flesh out
+the meaning behind some of the more convoluted rules.
+
+\begin{figure}[ht!]
+\setlength\fboxsep{0.15cm}
+\noindent$\boxed{\text{Judgement: } \storeinv e, c \leadsto \sigma'}$
+
+\begin{align*}
+\textsc{I-Bind: }
+  \dfrac
+    {}
+    {\storeinv x, c \leadsto \sigma, x \mapsto c} &&
+\textsc{I-Bind2: }
+  \dfrac
+    {}
+    {p; \sigma, x \mapsto c_2 \vdash^{-1} x, c_1 \leadsto \sigma, x \mapsto c}
+    c_1 = c_2
+\end{align*}
+\begin{align*}
+\textsc{I-Unit: }
+  \dfrac
+    {}
+    {\storeinv (), () \leadsto \sigma} &&
+\textsc{I-Prod: }
+  \dfrac
+    {\begin{array}{cc}
+       \storeinv e_1, c_1 \leadsto \sigma' &
+       p; \sigma' \vdash^{-1} e_2, c_2 \leadsto \sigma''
+     \end{array}}
+    {\storeinv (e_1, e_2), (c_1, c_2) \leadsto \sigma''}
+\end{align*}
+\begin{align*}
+\textsc{I-Inl: }
+  \dfrac
+    {\storeinv e, c \leadsto \sigma'}
+    {\storeinv \inl{e}, \inl{c} \leadsto \sigma'} &&
+\textsc{I-Inr: }
+  \dfrac
+    {\storeinv e, c \leadsto \sigma'}
+    {\storeinv \inr{e}, \inr{c} \leadsto \sigma'}
+\end{align*}
+\begin{align*}
+\textsc{I-Var1: }
+  \dfrac
+    {\storeinv e, c \leadsto \sigma'}
+    {p; \sigma, x \mapsto c \vdash^{-1} e, x \leadsto \sigma'}
+    \sigma(x) = c &&
+\textsc{I-Var2: }
+  \dfrac
+    {}
+    {\storeinv e, x \leadsto \sigma}
+    x \not\in \sigma
+\end{align*}
+\begin{align*}
+\textsc{I-Roll: }
+  \dfrac
+    {\storeinv e, c \leadsto \sigma'}
+    {\storeinv \roll{\tau}{e}, \roll{\tau}{c} \leadsto \sigma'} &&
+\textsc{I-Unroll: }
+  \dfrac
+    {\storeinv e, \roll{\tau}{c} \leadsto \sigma'}
+    {\storeinv \unroll{\tau}{e}, c \leadsto \sigma'}
+\end{align*}
+\begin{align*}
+\textsc{I-Let: }
+  \dfrac
+    {\begin{array}{cc}
+       \storeinv e_2, c \leadsto \sigma' &
+       p; \sigma' \vdash^{-1} e_1, x \leadsto \sigma''
+     \end{array}}
+    {\storeinv \lett{x}{e_1}{e_2}, c \leadsto \sigma''}
+\end{align*}
+\begin{align*}
+\textsc{I-LetC: }
+  \dfrac
+    {\begin{array}{cc}
+       \pcon e_1 \downarrow c' &
+       \storeinv e_2[c' / x], c \leadsto \sigma'
+     \end{array}}
+    {\storeinv \lett{x}{e_1}{e_2}, c \leadsto \sigma'}
+    \text{$e_1$ is closed}
+\end{align*}
+\begin{align*}
+\textsc{I-LetP: }
+  \dfrac
+    {\begin{array}{ccc}
+       \storeinv e_2, c \leadsto \sigma' &
+       \sigma' \vdash^{-1} e_1, (x, y) \leadsto \sigma''
+     \end{array}}
+    {\storeinv \lett{(x,y)}{e_1}{e_2}, c \leadsto \sigma''}
+\end{align*}
+\begin{align*}
+\textsc{I-App: }
+  \dfrac
+    {\begin{array}{ll}
+        \pcon f!~\tau_1 \dots \tau_m~e_1 \dots e_{n-1}~c \downarrow c' &
+        \storeinv e_n, c' \leadsto \sigma'
+    \end{array}}
+    {\storeinv f~\tau_1 \dots \tau_m~e_1 \dots e_n, c \leadsto \sigma'}
+    \text{$e_1, \dots, e_{n-1}$ are closed.}
+\end{align*}
+\begin{align*}
+\textsc{I-InvApp: }
+  \dfrac
+    {\begin{array}{ll}
+        \pcon f~\tau_1 \dots \tau_m~e_1 \dots e_{n-1}~c \downarrow c' &
+        \storeinv e_n, c' \leadsto \sigma'
+    \end{array}}
+    {\storeinv f!~\tau_1 \dots \tau_m~e_1 \dots e_n, c \leadsto \sigma'}
+    \text{$e_1, \dots, e_{n-1}$ are closed.}
+\end{align*}
+\caption{The inverse semantics of \rfunc, missing case rules.}\label{fig:inverse_semantics}
+\end{figure}
+
+\begin{figure}[ht!]
+\begin{align*}
+\textsc{I-CaseL: }
+  \dfrac
+    {\begin{array}{cc}
+       \storeinv e_2, c \leadsto \sigma' &
+       p; \sigma' \vdash^{-1} e_1, \inl{x} \leadsto \sigma''
+     \end{array}}
+    {\storeinv \caseof{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3}, c \leadsto \sigma''}
+\end{align*}
+\begin{align*}
+\textsc{I-CaseR: }
+  \dfrac
+    {\begin{array}{cc}
+       \storeinv e_3, c \leadsto \sigma' &
+       p; \sigma' \vdash^{-1} e_1, \inr{y} \leadsto \sigma''
+     \end{array}}
+    {\storeinv \caseof{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3}, c \leadsto \sigma'}
+    c \not\in \PLVal (e_2)
+\end{align*}
+\begin{align*}
+\textsc{I-CaseSL: }
+  \dfrac
+    {\begin{array}{ccc}
+        \pcon e_a[c / out] \downarrow \inl{()} &
+        \storeinv e_2, c \leadsto \sigma' &
+        p; \sigma' \vdash^{-1} e_1, \inr{x} \leadsto \sigma''
+     \end{array}}
+    {\storeinv \caseofs{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3}{e_a}, c \leadsto \sigma'}
+\end{align*}
+\begin{align*}
+\textsc{I-CaseSR: }
+  \dfrac
+    {\begin{array}{ccc}
+        \pcon e_a[c / out] \downarrow \inr{()} &
+        \storeinv e_3, c \leadsto \sigma' &
+        p; \sigma' \vdash^{-1} e_1, \inr{y} \leadsto \sigma''
+     \end{array}}
+    {\storeinv \caseofs{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3}{e_a}, c \leadsto \sigma'}
+\end{align*}
+\begin{align*}
+\textsc{I-CaseUL: }
+  \dfrac
+    {\begin{array}{cc}
+       % c \in \leaves (e_2) &
+       \storeinv e_2, c \leadsto \sigma' &
+       p; \sigma' \vdash^{-1} e_1, \inr{x} \leadsto \sigma''
+     \end{array}}
+    {\storeinv \caseofu{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3}, c \leadsto \sigma'}
+\end{align*}
+\begin{align*}
+\textsc{I-CaseUR: }
+  \dfrac
+    {\begin{array}{cc}
+       % c \in \leaves (e_3) &
+       \storeinv e_3, c \leadsto \sigma' &
+       p; \sigma' \vdash^{-1} e_1, \inr{y} \leadsto \sigma''
+     \end{array}}
+    {\storeinv \caseofu{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3}, c \leadsto \sigma'}
+\end{align*}
+\caption{The inverse semantics for case-expressions.}\label{fig:inverse_semantics_cases}
+\end{figure}
+
+\paragraph{Binding Rules}
+
+The binding rules ensure two distinct properties: Predicting a value for a
+variable from the forward direction (by \textsc{I-Bind1}) and maintaining the
+relevance of variables (by \textsc{I-Bind2}). Specifically, if the same
+variable name is attempted to be bound twice, we conclude that they must occur
+twice in the program. This is legal by relevance, but we must assure ourselves
+that the new value we try to bind is the same as the old one, otherwise the
+derivation fails.
+
+\paragraph{Function Application}
+
+A function application does not retract any syntactic construct atomically like
+other inference rules which match on the free value --- we instead invoke a
+function application which is designed to revert the result of the forward
+function application. As expected, the ancillae parameters are invariant (and
+closed). During inverse evaluation, a regular function application dictates an
+inverse function application and vice versa. We want to express that the result
+of the forward application must have been the current free value. Hence, the
+inverse application designates it as the dynamic parameter --- and the result
+of the application is matched against the dynamic parameter expression.
+
+\paragraph{Let-expressions}
+
+The free value must necessarily match on $e_2$ as that is evaluated last, with
+$x$ substituted for $e_1$. Therefore we attempt to bind $c$ to $e_2$ first.
+This likely gives us a binding for $x$. How $x$ was computed is witnessed in
+$e_1$. So we either completely uncompute $x$ (if $e_1$ was closed, which
+completely retracts $e_1$) or we figure out bindings for the variables making
+up $x$ by treating $x$ as a free value against $e_1$. The two inference rules
+\textsc{I-Let} and \textsc{I-LetP} for let-expressions function identically,
+but are written for each syntactic form of let-expressions.
+
+The final inference rules for let-expression, \textsc{I-LetC}, is legal as when
+$e_1$ is closed, then is constant, and we are not missing any information
+regarding what went into deriving it in the forward direction. This rule is
+important for one purpose --- consider the following function:
+
+\begin{align*}
+  f~(y: \tau) = \lett{x}{()}{f~x~y}
+\end{align*}
+
+$x$ is constant (and static) and may be used an ancilla in the application of
+$f$, but the inverse inference rules cannot discern it before it is needed,
+\emph{unless} we by the \textsc{I-LetC} rule recognize that we do already know
+it.
+
+\paragraph{Case-expressions}
+
+We expect branching to be deterministic. This is achieved in three different
+ways, based on the form of the case-expression. We present particular inference
+rules for each form:
+
+\begin{enumerate}
+
+  \item Determinism is achieved by the first match principle. In this case, an
+    identical side condition, as seen in the big step forward evaluation, is
+    added to the \textsc{I-CaseR} rule.
+
+  \item Determinism is achieved by an exit assertion: This is straightforward
+    --- we simply check the exit assertion against the free value, as the free
+    value should be regarded as the result of whichever branch was taken.
+
+  \item Determinism is achieved by knowing that the free value can only
+    uniquely match on one of the branch expressions. In this case we can freely
+    expect the branch expression which has a binding form with $c$ to have been
+    taken in the forward direction without any further validity checks (but
+    again, only if the uniqueness of the branches has been guaranteed).
+
+\end{enumerate}
+
+With formal inference rules for inverse evaluation in place, we can derive
+$\sigma$ for Prog.~\ref{prog:inverse_example}. A partial view of the derivation
+is presented in Fig.~\ref{fig:inverse_derivation}.
+
+\begin{figure}[t]
+  \centering
+  \begin{prooftree}
+    \infer0[\textsc{I-Bind}]{p; [] \vdash^{-1} x, () \leadsto [x \mapsto ()]}
+    \infer0[\textsc{I-Bind}]{p; [x \mapsto ()] \vdash^{-1} y, () \leadsto [x \mapsto (), y \mapsto ()]}
+    \infer2[\textsc{I-Prod}]{p; [] \vdash^{-1} (y, x), ((), ()) \leadsto [x \mapsto (), y \mapsto ()]}
+    \hypo{\dots}
+    \infer2[\textsc{I-LetP}]{p; [] \vdash^{-1} \lett{y}{()}{(y ,x)}, ((), ()) \leadsto [x \mapsto ()]}
+  \end{prooftree}
+  \caption{Partial view of derivation of program
+  Def.~\ref{prog:inverse_example}, by the inverse semantics with inverse input
+  $((), ())$.}\label{fig:inverse_derivation}
+\end{figure}
+
+\section{Correctness of Inverse Semantics}
+
+We now move on to prove the correctness of the inverse semantics as seen in
+Fig.~\ref{fig:inverse_semantics}. The proof reflects that we can recover the
+form of the substitution $c$ of $x$ by the inverse semantics from an expression
+$e$ --- where  we have that $e[c / x] \downarrow c'$ --- by knowing $c'$. Note
+that it is only relevant precisely when $x$ is the only open term in $e$ ---
+but this fits well with reality: We will exploit that $x$ is the variable name
+of the dynamic variable after every ancillary parameter has been substituted
+already, noticing that we may substitute the ancillary variable directly as
+they are invariant.
+
+\begin{lemma}\label{thm:exactinv}
+
+  If $\pcon e[c / x] \downarrow c'$ (by $\mathcal{E}$) where $x$ is the only
+  free variable in $e$, then $p; \emptyset \vdash^{-1} e, c' \leadsto \{x
+  \mapsto c\}$ (by $\mathcal{I}$).
+
+\end{lemma}
+
+\begin{proof}
+
+  By induction over the derivation $\mathcal{E}$. We have the cases:
+
+  \begin{itemize}
+    \setlength\itemsep{1em}
+
+    \item Case $\mathcal{E} =
+      \dfrac
+        {}
+        {\pcon ()[c / x] \downarrow ()}$
+
+        This case is not applicable as $()$ obviously cannot contain a free
+        occurrence of $x$, so it is vacuously true.
+
+    \item Case $\mathcal{E} =
+      \dfrac
+        {}
+        {\pcon x[c / x] \downarrow c'}$
+
+      Then $c = c'$ and $e = x$, and we can construct a derivation directly by
+      \textsc{I-Bind}:
+
+      \begin{align*}
+        \mathcal{I} = \dfrac
+          {}
+          {\emptyinv x, c \leadsto x \mapsto c}
+      \end{align*}
+
+    \item Case $\mathcal{E} =
+      \dfrac
+        {\overset
+           {\mathcal{E}_0}
+           {\pcon e [c / x] \downarrow c'}
+        }
+        {\pcon \inl{e}[c / x] \downarrow c'}$
+
+      We immediately use the Induction Hypothesis on $\mathcal{E}_0$ and get a
+      derivation $\mathcal{I}_0 = \emptyinv e, c' \leadsto x \mapsto c$, and by
+      the \textsc{I-Inl} rule on $\mathcal{I}_0$ we have:
+
+      \begin{align*}
+        \mathcal{I} = \dfrac
+          {\overset
+            {\mathcal{I}_0}
+            {\emptyinv e, c' \leadsto x \mapsto c}
+          }
+          {\emptyinv \inl{e}, \inl{c'} \leadsto x \mapsto c}
+      \end{align*}
+
+      An almost identical proof is constructed for when $\mathcal{E}$ is a
+      derivation of $\pcon \inr{e}[c / x] \downarrow c'$ and $\pcon
+      (\roll{\tau}{e}) [c / x] \downarrow c'$.
+
+    \item Case $\mathcal{E} =
+      \dfrac
+        {\begin{array}{cc}
+            \overset
+              {\mathcal{E}_0}
+              {e_1 [c / x] \downarrow c'} &
+            \overset
+              {\mathcal{E}_1}
+              {e_2 [c / x] \downarrow c''}
+         \end{array}
+        }
+        {\pcon (e_1, e_2) [c / x] \downarrow (c', c'')}$
+
+        $x$ must occur in either $e_1$ or $e_2$ or both. If $x$ occurs in $e_1$
+        only, the Induction Hypothesis on $\mathcal{E}_0$ gives us a derivation
+        $I_0 = \emptyinv e_1, c' \leadsto x \mapsto c$. Further, since $e_2$ by
+        implication contains no free variables, by Lemma~\ref{thm:emptyinv} we
+        have a derivation $\mathcal{I}_1 = p; x \mapsto c \vdash^{-1} e_2, c''
+        \leadsto x \mapsto c$. By applying \textsc{I-Prod} with $\mathcal{I}_0$
+        and $\mathcal{I}_1$ we have:
+
+        \begin{align*}
+          \mathcal{I} = \dfrac
+            {\begin{array}{cc}
+                \overset
+                  {\mathcal{I}_0}
+                  {\emptyinv e_1, c' \leadsto x \mapsto c} &
+                \overset
+                  {\mathcal{I}_1}
+                  {p; x \mapsto c \vdash^{-1} e_2, c'' \leadsto x \mapsto c}
+             \end{array}
+            }
+            {\emptyinv (e_1, e_2), (c', c'') \leadsto x \mapsto c}
+        \end{align*}
+
+        An analogous proof is valid for if only $e_2$ contains $x$. If both
+        $e_1$ and $e_2$ contain $x$, the derivation of $\mathcal{I}_1$ must
+        include an application of \textsc{I-Bind2} to show that the resulting
+        store is in fact $x \mapsto c$.
+
+    % \item Case $\mathcal{E} =
+    %   \dfrac
+    %     {\overset
+    %       {\mathcal{E}_0}
+    %       {\pcon e [c / x] \downarrow c'}
+    %     }
+    %     {\pcon (\roll{\tau}{e}) [c / x] \downarrow \roll{\tau}{c'}}$.
+
+    \item Case $\mathcal{E} =
+      \dfrac
+        {\overset
+          {\mathcal{E}_0}
+          {\pcon e [c / x] \downarrow \roll{\tau}{c''}}
+        }
+        {\pcon (\unroll{\tau}{e}) [c / x] \downarrow c''}$
+
+        By the Induction Hypothesis on $\mathcal{E}_0$ (with $c' =
+        \roll{\tau}{c''}$) we get a derivation $\mathcal{I}_0 = \emptyinv e [c
+        / x], \roll{\tau}{c''} \leadsto x \mapsto c$, and we can use it
+        directly to construct $\mathcal{I}$ by applying \textsc{I-Unroll}:
+
+        \begin{align*}
+          \mathcal{I} = \dfrac
+            {\overset
+              {\mathcal{I}_0}
+              {\emptyinv e, \roll{\tau}{c''} \leadsto x \mapsto c}
+            }
+            {\emptyinv \unroll{\tau}{e}, c'' \leadsto x \mapsto c}
+        \end{align*}
+
+    \item Case $\mathcal{E} =
+      \dfrac
+        {\begin{array}{cc}
+            \overset
+              {\mathcal{E}_0}
+              {\pcon e_1 [c / x] \downarrow c''} &
+            \overset
+              {\mathcal{E}_1}
+              {\con e_2 [x' / c'', c / x] \downarrow c'}
+         \end{array}
+        }
+        {\pcon (\lett{x'}{e_1}{e_2}) [c / x] \downarrow c'}$
+
+        By Lemma~\ref{thm:generalinv}, we may consider multiple substitutions.
+        There are a number of cases here: $x'$ might or might not be an open
+        term in $e_2$ and $x$ might be in $e_1$, $e_2$ or both.
+
+     \begin{itemize}
+
+       \item If $x'$ is not an open term in $e_2$, then $x$ must occur in
+         $e_2$.  This is evident as a derivation $\mathcal{I}_0$ by the
+         Induction Hypothesis on $\mathcal{E}_1$ would result in a store not
+         containing a mapping for $x'$ --- and a derivation $\mathcal{I}_1$ of
+         $\langle e_1, x' \rangle$ would immediately apply \textsc{I-Var2} as
+         there is no mapping for $x'$ by the derivation $\mathcal{I}_0$. Thus
+         the Induction Hypothesis on $\mathcal{E}_1$ gives us $\mathcal{I}_0 =
+         \emptyinv e_2, c \leadsto x \mapsto c$ and we can construct
+         $\mathcal{I}$ as:
+
+         \begin{align*}
+           \mathcal{I} = \cfrac
+             {\begin{array}{cc}
+                 \overset
+                   {\mathcal{I}_0}
+                   {\emptyinv e_2, c' \leadsto x \mapsto c} &
+                   {\cfrac
+                     {}
+                     {p; x \mapsto c \vdash^{-1} e_1, x' \leadsto x \mapsto c}
+                     x' \not\in \{ x \mapsto c \}
+                   }
+              \end{array}
+            }
+            {\emptyinv \lett{x'}{e_1}{e_2}, c' \leadsto x \mapsto y}
+         \end{align*}
+
+       \item If $x'$ is an open term in $e_2$, we have three possible cases for
+         where $x$ occurs: in only $e_1$, in only $e_2$ or in both. If it only
+         occurs in $e_2$, then by Lemma~\ref{thm:generalinv} we have a
+         derivation $\mathcal{I}_1 = \emptyinv e_2, c' \leadsto x' \mapsto c'',
+         x \mapsto c$. This means $e_1$ is necessarily a closed term, and by
+         Lemma~\ref{thm:emptyinv} on $\mathcal{E}_0$ we finally have:
+
+         \begin{align*}
+           \mathcal{I} = \dfrac
+           {\begin{array}{cc}
+               \overset
+                 {\mathcal{I}_0}
+                 {\emptyinv e_2, c' \leadsto x \mapsto c, y \mapsto c''} &
+               \overset
+                 {\mathcal{I}_1}
+                 {p; x \mapsto c, y \mapsto c'' \vdash^{-1} e_1, y \leadsto x \mapsto c}
+            \end{array}
+           }
+           {\emptyinv \lett{x'}{e_1}{e_2}, c' \leadsto x \mapsto y}
+         \end{align*}
+
+         If $x$ is an open term in both, a similar reasoning is used, but $e_1$
+         is not closed --- rather, we know the derivation of $\langle e_1, x'
+         \rangle$ must use an application of \textsc{I-Bind2} which ensures
+         that the only binding is $x \mapsto c$ is consistent, and we are done.
+
+         If $x$ only occurs in $e_1$, then by applying the Induction Hypothesis
+         directly on $\mathcal{E}_1$ we get a derivation $\mathcal{I}_0 =
+         \emptyinv e_2, c' \leadsto x' \mapsto c''$. The only inference rule
+         possible for $\mathcal{I}$ is \textsc{I-Let}, and we need to construct
+         a derivation for $\mathcal{I}_1$. By applying \textsc{I-Var1} for the
+         second premise on $\langle e_1, x' \rangle$ we get some derivation:
+
+         \begin{align*}
+           \mathcal{I}_1 = \dfrac
+            {\overset
+              {\mathcal{I}_1'}
+              {\emptyinv e_1, c'' \leadsto \sigma}
+            }
+            {p; x' \mapsto c'' \vdash^{-1} e_1, x' \leadsto \sigma}
+         \end{align*}
+
+         For some $\sigma$. Then we may use the Induction Hypothesis on
+         $\mathcal{E}_0$ with $\mathcal{I}_1'$, and we finalize the derivation
+         $\mathcal{I}_1$ so that $\sigma = x \mapsto c$ and we can finally
+         construct:
+
+         \begin{align*}
+           \mathcal{I} = \dfrac
+            {\begin{array}{cc}
+                \overset
+                  {\mathcal{I}_0}
+                  {\emptyinv e_2, c' \leadsto x' \mapsto c''} &
+                \overset
+                  {\mathcal{I}_1}
+                  {\cfrac
+                    {\emptyinv e_1, c'' \leadsto x \mapsto c}
+                    {p; x' \mapsto c'' \vdash^{-1} e_1, x' \leadsto x \mapsto c}
+                  }
+             \end{array}}
+            {\emptyinv \lett{x'}{e_1}{e_2}, c' \leadsto x \mapsto c}
+         \end{align*}
+
+         An analogous proof works for when $e = \lett{(x, y)}{e_1}{e_2}$.
+
+     \end{itemize}
+
+    \item Case $\mathcal{E} =
+      \dfrac
+        {\begin{array}{cc}
+            \overset
+              {\mathcal{E}'_0, \dots, \mathcal{E}'_n}
+              {\pcon e_1 [c / x] \downarrow c_1' \dots \pcon e_n [c / x] \downarrow c_n'} &
+            \overset
+              {\mathcal{E}''}
+              {\pcon e[c_1' / x_1, c_n' / x_n, c / x] \downarrow c'}
+         \end{array}
+        }
+        {\pcon (f~\alpha_1 \dots \alpha_m~e_1 \dots e_n \downarrow) [c / x] \downarrow c'}$
+
+        Where $p(f) = f~\alpha_1 \dots \alpha_m~x_1 \dots x_n = e$. The only
+        applicative rule for the derivation is \textsc{I-App}, so each
+        expression $e_1, \dots, e_{n-1}$ must be closed and $x$ must occur in
+        $e_n$. $c'$ is also closed, as it is a canonical value. We by
+        Theorem~\ref{thm:inversemain} (the correctness of inverse application,)
+        have that $\mathcal{E}''' = f!~\alpha_1 \dots \alpha_m~e_1 \dots
+        e_{n-1}~c' \downarrow c''$, where $\emptyinv e[c_1' / x_1, \dots,
+        c_{n-1}' / x_{n-1}], c' \leadsto \sigma$ with $\sigma(x_n) = c''$.
+
+        But that means that $e_n [c / x] \downarrow c''$, as a substitution of
+        $c_n'$ occurs for $x_n $ in $\mathcal{E}''$, and we have $e_n [c / x]
+        \downarrow c_n'$ by $\mathcal{E}_n'$. By the Induction Hypothesis on
+        $\mathcal{E}_n'$ we have $\mathcal{I}_0 = \emptyinv e_n, c'' \leadsto x
+        \mapsto c$, and we construct the full derivation:
+
+        \begin{align*}
+          \mathcal{I} = \dfrac
+            {\begin{array}{cc}
+                \overset
+                  {\mathcal{E}''''}
+                  {f!~\alpha_1 \dots \alpha_m~e_1 \dots e_{n-1}~c' \downarrow c''} &
+                \overset
+                  {\mathcal{I}_0}
+                  {\emptyinv e_n, c'' \leadsto x \mapsto c}
+             \end{array}
+            }
+            {\emptyinv f~\alpha_1 \dots \alpha_m~e_1 \dots e_n, c' \downarrow c''}
+        \end{align*}
+
+        An analogous proof occurs when $\mathcal{E}$ is a derivation of an
+        inverse function call.
+
+    \item Case $\mathcal{E} =
+      \dfrac
+        {\begin{array}{cc}
+            \overset
+              {\mathcal{E}_0}
+              {\pcon e_1 [c / x] \downarrow \inl{c''}} &
+            \overset
+              {\mathcal{E}_1}
+              {\pcon e_2 [c'' / x', c / x]}
+         \end{array}
+        }
+        {\pcon (\caseof{e_1}{x'}{e_2}{x''}{e_3}) [c / x] \downarrow c'}$.
+
+        Proving this case is very similar to the proof for let-expressions,
+        with completely similar sub-cases for which expression contains which
+        open term. The only difference is we cannot directly apply
+        \textsc{I-Var} on $e_1$ but must start with matching the sum-term by
+        \textsc{I-Inl}. The same is true for \textsc{E-CaseR},
+        \textsc{E-CaseSL} and \textsc{E-CaseSR}.
+
+  \end{itemize}
+
+And we are done.
+
+\end{proof}
+
+\begin{lemma}\label{thm:emptyinv}
+
+  If $\pcon e \downarrow c$ (by $\mathcal{E}$) where there are no free
+  variable in $e$, then $\storeinv e, c \leadsto \sigma$ (by $\mathcal{I}$).
+
+\end{lemma}
+
+\begin{proof}
+
+  By induction over the derivation $\mathcal{E}$. The proof is highly similar
+  to the one for Lemma~\ref{thm:exactinv}, so we only show exemplary cases,
+  especially ones which are relevant:
+
+  \begin{itemize}
+
+    \item Case $\mathcal{E} = \dfrac
+      {}
+      {\pcon () \downarrow ()}$
+
+      We can construct a derivation directly using the \textsc{I-Unit} rule as:
+
+      \begin{align*}
+        \mathcal{I} = \dfrac
+          {}
+          {\emptyinv (), () \leadsto \emptyset}
+      \end{align*}
+
+    \item Cases for when $e$ is $\inl{e'}, \inr{e'}, \roll{\tau}{e'}, (e',
+      e'')$ and $\unroll{\tau}{e'}$ follow almost immediately by the Induction
+      Hypothesis on the premises of $\mathcal{E}$. The precise method was
+      exercised in the proof of Lemma~\ref{thm:exactinv}.
+
+    \item Case $\mathcal{E} = \dfrac
+      {\begin{array}{cc}
+        \overset
+          {\mathcal{E}_0}
+          {\pcon e_1 \downarrow c'} &
+        \overset
+          {\mathcal{E}_1}
+          {\pcon e_2 [c' / x] \downarrow c}
+       \end{array}
+      }
+      {\pcon \lett{x}{e_1}{e_2} \downarrow c}$
+
+      There are two cases: $e_2$ contains the open term $x$ or it does not. If
+      it does not, then by the Induction Hypothesis on $\mathcal{E}_1$ we get a
+      derivation $\mathcal{I}_0 = \emptyinv e_2, c \leadsto \emptyset$.
+      $\mathcal{I}$ must necessarily use the \textsc{I-Let} rule, and a
+      derivation of $\langle e_1, x \rangle$ must immediately use the
+      \textsc{I-Var2} rule as $\sigma = \emptyset$, and we have:
+
+      \begin{align*}
+        \mathcal{I} = \dfrac
+          {\begin{array}{cc}
+              \overset
+                {\mathcal{I}_0}
+                {\emptyinv e_2, c \leadsto \emptyset} &
+              \cfrac
+                {}
+                {\emptyinv e_1, x \leadsto \emptyset}
+              x \not\in \emptyset
+           \end{array}}
+          {\emptyinv \lett{x}{e_1}{e_2} \leadsto \emptyset}
+      \end{align*}
+
+      If $x$ is an open term in $e_2$, then by the induction hypothesis on
+      $\mathcal{E}_0$ we get a derivation $\mathcal{I}_0 = \emptyinv e_2, c
+      \leadsto x \mapsto c'$ for some $c'$. Then we construct $\mathcal{I}_1$
+      by applying the \textsc{I-Var1} if we can prove $\mathcal{I}_1' =
+      \emptyinv e_1, c' \leadsto \sigma$ for some $\sigma$. But we have this by
+      the Induction Hypothesis on $\mathcal{E}_0$ with $\mathcal{I}_1'$
+      concluding $\sigma = \emptyset$, allowing us to construct:
+
+      \begin{align*}
+        \mathcal{I} = \dfrac
+          {\begin{array}{cc}
+              \overset
+                {\mathcal{I}_0}
+                {\emptyinv e_2, c \leadsto x \mapsto c'} &
+              \cfrac
+                {\overset
+                  {\mathcal{I}_1}
+                  {\emptyinv e_1, c' \leadsto \emptyset}
+                }
+                {p; x \mapsto c \vdash^{-1} e_1, x \leadsto \emptyset}
+           \end{array}}
+          {\emptyinv \lett{x}{e_1}{e_2} \leadsto \emptyset}
+      \end{align*}
+
+  \end{itemize}
+
+  The remaining cases have been omitted, but are straightforward to include.
+
+\end{proof}
+
+\begin{lemma}\label{thm:generalinv}
+
+  If $\pcon e[c_1 / x_1, \dots, c_n / x_n] \downarrow c'$ (by $\mathcal{E}$)
+  where exactly the set $x_1, \dots, x_n$ are the free variables occurring in
+  $e$, then $p; \emptyset \vdash^{-1} e, c' \leadsto x_1 \mapsto c_1, \dots,
+  x_n \mapsto c_n$ (by $\mathcal{I}$).
+
+\end{lemma}
+
+\begin{proof}
+
+  The proof of this is a straightforward generalization of
+  Lemma~\ref{thm:exactinv} and~\ref{thm:emptyinv}.
+
+\end{proof}
+
+\begin{theorem}[Correctness of Inverse Semantics]\label{thm:inversemain}
+
+  If $p \vdash f~c_1 \dots c_n \downarrow c$ with $p(f) = \alpha_1 \dots
+  \alpha_m~x_1 \dots x_n = e$, then $\sigma(x_n) = c_n$ where $\emptyinv e[c_1
+  / x_1, \dots, c_{n-1} / x_{n-1}], c \leadsto \sigma$.
+
+\end{theorem}
+
+\begin{proof}
+
+  Follows immediately by an application of Lemma~\ref{thm:exactinv} by
+  considering $e[c_1 / x_1, \dots, c_{n-1} / x_{n-1}]$ as the expression $e$
+  with exactly one open term $x_n$, which we substitute with $c_n$. Then
+  $\emptyinv e[c_1 / x_1, \dots, c_{n-1} / x_{n-1}], c \leadsto x_n \mapsto
+  c_n$, and specifically, $\{x_n \mapsto c_n\} (x_n) = c_n$.
+
+\end{proof}

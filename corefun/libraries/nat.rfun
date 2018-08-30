@@ -1,0 +1,27 @@
+type Nat = Null | Succ Nat
+
+inc :: Nat
+inc n = roll [Nat] (Succ n)
+
+pred :: Nat
+pred n = inc! n
+
+plus :: Nat -> Nat
+plus n0 Null = n0
+plus n0 (Succ n1) = let n' = plus n0 n1
+                    in inc n'
+
+minus :: Nat -> Nat
+minus n0 n1 = plus! n0 n1
+
+mult :: Nat -> Nat
+mult Null Null = roll [Nat] Null
+mult Null (Succ n1') = inc n1'
+mult (Succ n0') Null = inc n0'
+mult (Succ n0') (Succ n1) = let n0 = inc n0'
+                                n' = mult n0 n1
+                            in plus n0 n'
+
+div :: Nat -> Nat
+div n0 Null = roll [Nat] Null
+div n0 (Succ n1) = mult! n0 (inc n1)

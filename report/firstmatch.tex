@@ -1,0 +1,445 @@
+% !TEX root = main.tex
+
+\chapter{Statically Checking the First Match Policy}\label{sec:staticFMP}
+
+The side condition in the \textsc{E-CaseR} rule is essential when ensuring
+reversibility of partial functions. The authors of the original \rfun paper
+dubbed their very similar mechanism the \emph{First Match
+Policy}~\cite{YokoyamaAxelsenGlueck:2012:LNCS}, a convention we will follow. It
+is, unfortunately, a property that can only be fully guaranteed at run-time;
+from Rice's theorem we know that all non-trivial semantic properties of
+programs are undecidable~\cite{Rice:1953}. However, with the type system, we
+can now in many cases resolve the first match policy statically.
+
+Overall we may differentiate between two notions of divergence:
+
+\begin{enumerate}
+
+  \item A function may have inputs that do not result in program termination.
+
+  \item A function may have inputs for which it does not have a defined
+    behaviour; this could be the result of missing clauses.
+
+\end{enumerate}
+
+Note that the semantics of \rfunc dictate that if a computation does not
+terminate in the forward direction, no input in the backwards direction may
+evaluate to this input. Dual for backwards computations.
+
+\begin{proof}
+
+  Assume that termination is not a symmetric property. Consider some function
+  $f~x_1 \dots x_n$ which diverges in the forward direction with applied values
+  $c_1 \dots c_n$. Now, there exists an $f$ such that we should be able to find
+  some input $i$ to the inverse function such that $f^{-1}~c_1 \dots i
+  \downarrow c_n$ --- that is, the diverging input in the forward direction.
+  Since the inverse direction converges, we have determined a result in the
+  forward direction, which is a contradiction. A dual argument is valid in the
+  backward direction.
+
+\end{proof}
+
+Termination analysis (1.) is not what we will detail here, but rather inputs
+for which the function is not defined (2.). Because the first match policy is
+enforced by the operational semantics, it follows that whenever an application
+of the \textsc{Case-R} rule fails its side condition, the expression cannot be
+derived, which by extension means the function is not defined for this input.
+
+\begin{definition}
+
+The domain of a function $f$ is the subset of the $n$-ary Cartesian product of
+canonical values which are inhabitants of the type of each parameter, for which
+$f$ evaluates to a closed term:
+
+\begin{align}
+  \dom (f~(x_1 : \tau_1) \dots (x_n : \tau_n)) =
+  \{ (c_1, \dots, c_n) \mid c_1 \in \tau_1, \dots, c_2 \in \tau_n,
+     f~c_1 \dots c_n \downarrow c \}
+\end{align}
+
+\end{definition}
+
+Intuitively, some combination of inhabitants of the types $\tau_1 \dots \tau_n$
+applied to $f$ might fail to evaluate to a closed term because of either (1.)
+or (2.) (they are not in the domain of $f$.) We wish to investigate exactly
+when we can or when we cannot \emph{guarantee} that a derivation of a
+case-expression in $f$ is going to uphold the first match policy for \emph{all}
+elements in the domain of $f$. To a certain degree this is reminiscent of
+arguing for the \emph{totality} of the function, up to termination. Contrary to
+the argument for termination, this property of a first match policy guarantee
+is not symmetric: More specifically, a function $f$ and its inverse function
+$f^{-1}$ might not accommodate this restricted notion of totality on their
+respective domains, although it is certainly possible.
+
+This analysis is only possible due to the type system, as we define the domain
+based directly on the type of the function --- it formally hints us at the
+underlying sets of values which occur in case-expressions, something which is
+only possible when terms are given types.
+
+\section{Benefits of First Match Policy Assertions}
+
+A pitfall with a language using a first-match policy to guarantee reversibility
+is the added cost of making sure the first match policy is being met at
+runtime. It establishes a need to be attentive when writing programs to not
+write case-expressions whose side condition check adds a multiplicative
+overhead to the function's run time, potentially increasing the asymptotic
+complexity of the algorithm. This may for example occur when the side condition
+invocation involves traversing the full structure of the input, making each
+iteration linear. With a first match policy assertion provided, the side
+condition check may be substituted with a (hopefully) simpler assertion,
+increasing computational efficiency.
+
+As an additional benefit, an assertion which is expressive can be seen as an
+enhancement of clarity of the behaviour of the case-expression to which it
+belongs. It also simplifies the process of inverse evaluation of that case
+expression by adding additional structure to the form of the left and right
+arm, as will be discussed in Sect.~\ref{sec:running_backwards}.
+
+\section{Adding First Match Policy Assertions to the Formal Language}
+
+The first match policy is ultimately enforced with the addition of the side
+condition of the \textsc{Case-R} type rule. The issue is that it compels a
+computation of the PLVal set on $e_1$ at every application of this rule. The
+present ambition is to express an alternative method of ensuring reversibility
+of branching. We introduce two new syntactic constructs to \rfunc: \emph{Safe}
+and \emph{unsafe} case-expressions. These are presented in the grammar in
+Fig.~\ref{fig:new_cases}.
+
+\begin{figure}[t]
+\begin{tabular}{p{.6\textwidth}l}
+  $e ::=$ \\
+  $\qquad \quad \vdots$ \\
+  $\hspace{1.7em}\mid \caseofs{e}{\inl{x}}{e}{\inr{y}}{e}{e}$ & \text{Safe case-expression} \\
+  $\hspace{1.7em}\mid \caseofu{e}{\inl{x}}{e}{\inr{y}}{e}$ & \text{Unsafe case-expression} \\
+\end{tabular}
+\caption{New case-expression syntax}\label{fig:new_cases}
+\end{figure}
+
+\paragraph{Safe case-expressions}
+
+A safe case-expression is augmented with a \emph{safe exit assertion}. Consider
+an expression $\caseofs{e_1}{x}{e_2}{y}{e_3}{e_{out}}$. It omits the first
+match policy check and instead checks the resulting value $c$ of the forward
+evaluation of the case-expression against a static predicate $e_{out}$ at run
+time (that is, an expression which evaluates to a Boolean type $1 + 1$.) Since
+it is determined by the syntax of a case-expression that the expression $e_1$
+cased over is of a binary sum type, it suffices to define a single predicate
+which should always hold after $e_2$ has been evaluated and by implication
+always \emph{not} hold when $e_3$ has been evaluated. The safe exit assertions
+we propose here preserve reversibility much like Janus --- Janus includes
+conditionals and loops augmented with an additional exit assertion, making
+its control flow constructs completely symmetric. Inverse evaluation of
+conditionals and loops in Janus is then as simple as exchanging the entry and
+exit assertions in the backwards direction (while also reversing the statement
+blocks contained in these.)
+
+We require a new type rule for the case-expression to support safe case
+expressions. It is highly similar to the preexisting \textsc{T-Sum} rule, but
+with the added criteria that the type of the safe exit assertion is $1 + 1$. We
+introduce a variable $out$ in the assertion, which assumes the value of the
+result of the case-expression --- granting the programmer the possibility to
+make the exit assertion depend on the value produced by the case-expression.
+The new type rule can be seen in Fig.~\ref{math:case_typing}.
+
+\begin{figure}[t]
+\begin{align*}
+  \textsc{T-SumU: }
+    \dfrac
+      {\begin{array}{ccccc}
+       \con e_1 : \tau' + \tau'' & \quad &
+       \Sigma; \Gamma', x : \tau' \vdashe e_2 : \tau \\
+       \Sigma; \Gamma', y : \tau'' \vdashe e_3 : \tau & &
+       \Sigma; out : \tau \vdash e_a : 1 + 1
+       \end{array}}
+       {\concup \caseofs{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3}{e_a} : \tau}
+\end{align*}
+\caption{New typing rule for a case-expression with an exit
+assertion.}\label{math:case_typing}
+\end{figure}
+
+We also need two new evaluation rules for the big step semantic. These differ
+from the conventional \textsc{E-CaseR} and \text{E-CaseL} rules in that we
+enforce the added assertion through a premise which demands to be evaluated to
+either \textbf{inr}(()) or \textbf{inl}(()), depending on which branch was
+taken. Meanwhile, the side condition is removed. Note that with an exit
+assertion, matching on a left branch is stricter than the conventional
+behaviour exhibited by \textsc{E-CaseL} as it might fail.
+
+\paragraph{Unsafe case-expressions}
+
+An \emph{unsafe case-expression} is augmented with the \textbf{unsafe} keyword.
+The result of the forward evaluation of a case-expression is not subjected to
+any validation check when the right branch is taken. This means it allows more
+programs, including programs which are not injective. It is thus only
+reversible if the correct branch can be discerned in the backwards direction
+unanimously by its syntactic form. Therefore we do not allow unsafe
+case-expressions into the syntax directly. Rather, we only allow statically
+generated unsafe case-expressions. No new type rule is needed to eliminate
+unsafe case-expressions as typechecking occurs before static analysis.
+Operationally, the only difference in behaviour from the \textsc{E-CaseR} rule
+is that the side condition is omitted. Unsafe case-expression are inserted into
+the program by the static analysis we will present in the next
+Sect.~\ref{subsec:fmp_guarantee}.
+
+The operational rules for safe and unsafe case-expressions are shown in
+Fig.~\ref{math:assertion_semantics}. As already hinted at, the unsafe
+case-expression strictly speaking is not actually reversible, so we cannot
+prove Theorem~\ref{thm:ctxbackwarddet} if we adopt them as an expression form
+directly --- but we will informally say that in any circumstance where we
+\emph{do} insert them, they are safe enough to maintain reversibility.
+
+We still want to prove reversibility for case-expressions with safe exit
+assertions.  Below, we make sure that they actually maintain the reversibility
+of \rfunc by extending the proof for Theorem~\ref{thm:ctxbackwarddet}.
+
+\begin{figure}[ht]
+\begin{align*}
+  \textsc{E-CaseSL: }
+    \dfrac
+      {\begin{array}{cccccc}
+       \pcon e_1 \downarrow \inl{c_1} & \quad &
+       \pcon e_2 [c_1 / x] \downarrow c & \quad &
+       \pcon e_a [c / out] \downarrow \inl{()}
+       \end{array}}
+      {\pcon \caseofs{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3}{e_a} \downarrow c}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{E-CaseSR: }
+    \dfrac
+      {\begin{array}{cccccc}
+       \pcon e_1 \downarrow \inr{c_1} & \quad &
+       \pcon e_3 [c_1 / y] \downarrow c & \quad &
+       \pcon e_a [c / out] \downarrow \inr{()}
+       \end{array}}
+      {\pcon \caseofs{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3}{e_a} \downarrow c}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{E-CaseUL: }
+    \dfrac
+      {\begin{array}{ccccc}
+       \pcon e_1 \downarrow \inl{c_1} & \quad &
+       \pcon e_2 [c_1 / x] \downarrow c & \quad &
+       \end{array}}
+      {\pcon \caseofu{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3} \downarrow c}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{E-CaseUR: }
+    \dfrac
+      {\begin{array}{ccccc}
+       \pcon e_1 \downarrow \inr{c_1} & \quad &
+       \pcon e_3 [c_1 / y] \downarrow c & \quad &
+       \end{array}}
+      {\pcon \caseofu{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3} \downarrow c}
+\end{align*}
+\caption{New big step semantic rules for case-expressions with
+assertions.}\label{math:assertion_semantics}
+\end{figure}
+
+\begin{theorem}[Continued]\label{thm:ctxbackwarddet}
+
+\end{theorem}
+
+\begin{proof}
+
+  We first reassure ourselves that the proof for the previously shown forms of
+  $e$ remain valid, which is given to us by Induction Hypothesis directly. We
+  now consider the newly added case for $e$, which is missing to complete the
+  proof:
+
+  \begin{itemize}
+
+    \item Case $e = \caseofs{e_1}{\inl{x'}}{e_2}{\inr{y'}}{e_3}{e_a}$
+
+      There are two possible derivations of $e$:
+
+  \begin{itemize}
+
+      \item By \textsc{E-CaseSL}. By Induction Hypothesis on $e_1$ we get a
+        contextually deterministic derivation for $e_1$, evaluating to $c_1$.
+        By application of the Induction Hypothesis on $e_2 [c_1 / x]$ we derive
+        a value $c' = c'' = c$. Now, as the semantics are deterministic, by the
+        Induction Hypothesis on $e_a [c / out]$, we can only ever derive the
+        same value $c_a$ by the Theorem assumption --- specifically $\inl{()}$
+        if we are going to infer the conclusion by the \textsc{E-CaseSL} rule.
+
+      \item By \textsc{E-CaseSR}. The proof is analogous to the previous case.
+
+    \end{itemize}
+
+  \end{itemize}
+
+  And we are done.
+
+\end{proof}
+
+\section{First Match Policy over Open Terms}\label{subsec:fmp_guarantee}
+
+In the following two sections we discuss the possibility of asserting that an
+unsafe static assertion may be defined for a case-expression.
+
+Intuitively, when the range of a function call is well-defined (typed), and all
+the leaves are disjoint, it is clear that any evaluated term will not match any
+other leaf. For example, the following function performs a transformation on a
+sum term. It is immediately obvious that its leaves are disjoint; it either
+evaluates to $\inl{\cdot}$ or to $\inr{\cdot}$:
+
+\begin{rfuncode}
+f $x : 1 + \tau$ = case $x$ of
+                inl(()) => inr(())
+                inr($y$) => inl($y$)
+\end{rfuncode}
+
+In Sect.~\ref{sec:semantics}, when we defined the operational semantics (cf.
+Fig.~\ref{math:semantics}), the first match policy was upheld for a case
+expression by checking that the closed term $c$ of the evaluation of the second
+branch ($\inr{\cdot}$) could not be a possible leaf value of the first branch
+($\inl{\cdot}$). However, the above example includes an open term that is
+defined over $y$.
+
+Given the existing definition of the unification relation $- \rhd -$
+(Def.~\ref{def:rhd_relation}), this is actually easy to alleviate with regards
+to the static analysis. $- \rhd -$ has already been defined to take \emph{any}
+term, both open and closed terms. Thus, in the general case, all we have to
+ensure is that all leaves of either branch do not have a possible value in the
+other branch.
+
+Said otherwise, we wish to cross compare the sets of possible leaf expressions
+of each branch. For a case-expression $\caseof{e_1}{x}{e_2}{y}{e_3}$, $e_2$ and
+$e_3$ each form a set of leaves, and by taking the Cartesian product of these
+sets, we can see if any leaf expressions unify pair-wise.  This can all be
+described as:
+
+\begin{align}
+  \{ (l_2, l_3) \mid l_2 \in \leaves(e_2)
+                   , l_3 \in \leaves(e_3)
+                   , l_2 \rhd l_3 \}
+  = \emptyset
+  \label{eq:leaves_ortho}
+\end{align}
+
+Because $- \rhd -$ is a symmetric relation, we may interchange the operands and
+still describe the same thing. Obviously, this static analysis is quite
+restricted because most terms will be open, and open terms unify very broadly.
+
+\section{First Match Policy over Closed Terms}
+
+Yet, we have not incorporated the type system into our analysis. We now
+investigate an alternative method --- concretely examining the domain of a
+function we are trying to write a first match policy guarantee for. This has a
+couple of benefits: Critically, we wish to avoid how the static leaves sets of
+each branch in a case-expression often will contain open terms (as these unify
+with anything, \emph{even though} the term might always have a simple,
+predictable form which unifies well.)
+
+The principle behind exhausting the domain is comparing the unions of possible
+leaf values of each branch for a case-expression for the complete domain of the
+function. Thus, the leaves sets being compared will potentially be much more
+populous, \emph{but} they will exclusively consist of closed terms, which in
+the end will more truthfully reflect how the function may be applied. In the
+following, let the case-expression $e_c = \caseof{e_1}{x}{e_2}{y}{e_3}$ be a
+subexpression of $e$ for the function $f~(x_1: \tau_1) \dots (x_n: \tau_n) =
+e$.
+
+We respectively define the union of the left and right leaves sets for $e_c$ as
+Eq.~\ref{def:leavesl} and Eq.~\ref{def:leavesr}. $e_2'$ is derived from $e_2$
+with substitutions occurring as for the application of $f$ with the values
+$c_1, \dots, c_n$ up until a case-rule is to be applied to $e_c$ (by the
+operational semantics.) Equivalently for $e_3'$ with $e_3$. We then adopt a
+notion of comparability between leaf sets similar to how it was defined over
+open terms in Eq.~\ref{def:closed_comparing}.
+
+\begin{align}
+  \leaves_l = \bigcup_{\substack{(c_1, \dots, c_n) \\ \in \dom{(f)}}} \leaves(e_2')
+  \label{def:leavesl} \\
+  \leaves_r = \bigcup_{\substack{(c_1, \dots, c_n) \\ \in \dom{(f)}}} \leaves(e_3')
+  \label{def:leavesr}
+\end{align}
+
+\begin{align}
+  \{ (l_2, l_3) \mid l_2 \in \leaves_l
+                   , l_3 \in \leaves_r
+                   , l_2 \rhd l_3 \}
+  = \emptyset
+  \label{def:closed_comparing}
+\end{align}
+
+The method is obviously only tangible when it converges, which requires two
+characteristics of the function: for the domain of the function to be finite
+and for the function to terminate on any inhabitant of its domain. We require
+the domain to be finite as we actually want to compute the full set of possible
+leaves, and with an infinite domain, we have to try infinitely many inputs. We
+require that any computation terminates as otherwise there is a possibility
+that we get stuck computing the leaves for the same instance of a function
+application indefinitely. These two requirements are not mutually inclusive, as
+can be shown by an example:
+
+\begin{align*}
+  f~(x:1) = \lett{y}{f~x}{y}
+\end{align*}
+
+It is immediate that the domain of a function $f$ is finite iff.~none of $f$'s
+parameters comprise a recursive type. Note that a parameter of a polymorphic
+type is general enough to be instantiated as a recursive type and is also
+prohibited. This property is immediate from the fact that we can construct a
+recursive value of an infinitely long chain of nested $\roll{\mu X .
+\tau}{\cdot}$ terms of type $\mu X . \tau$. Any other type must necessarily be
+constructed by values of strictly decreasing constituent types with $1$ as the
+bottom type. Even function applications in $f$ of functions which return forms
+of recursive types can only take on a finite set of values if the domain of $f$
+is finite due to referential transparency.
+
+Deciding if a function will terminate on any given input requires
+\emph{termination analysis}. In general this property is described as the
+halting problem, a famous undecidable problem~\cite{Turing:1937}. A lot of
+effort has been spent on statically guaranteeing termination for an increasing
+class of functions in all paradigms of programming. These often exploit a
+static hint of guaranteed decreases of input size, using term
+rewriting~\cite{Giesl:2006} or calling context graphs~\cite{Manolios:2006}.
+Since we forbid infinite domains, we do not expect functions not to terminate,
+so we may get away with a much simpler analysis.
+
+A method that is conservative but easily proven to be correct is constructing a
+directed \emph{computation graph}. It is defined as follows: Each vertex is a
+function name $f,g, \dots$ and each edge $f \rightarrow g, \dots$ between
+vertices $f$ and $g$ implies there is a function application of $g$ in the body
+of $f$. For each function $m$ we wish to analyze termination for, we look at
+the reachability relation of every function that $m$ is related to to see if
+they are reflexive. This is equivalent to checking for cycles in the
+computation graph. If no cycles exist, termination is guaranteed.
+
+Finally, both of the aforementioned analyses can be performed statically,
+making them a relatively simple but attainable practice.
+
+%\paragraph{Notes:}
+%
+%Because the PLVal set is overly conservative it restricts the possibility for a
+%First match policy guarantee. One cause of conservativeness is due to the
+%unification relation on variables and function applications, which does not
+%inspect the types of these constructs before concluding that any expression may
+%be unified with them. To remedy this we introduce unification of types as the
+%following:
+%
+%\begin{align*}
+%  1 & \rhd 1 \\
+%  \tau_1 \times \tau_2 & \rhd \tau_1' \times \tau_2
+%    & \text{if} \quad \tau_1 \rhd \tau_1' \vee \tau_2 \rhd \tau_2' \\
+%  \tau & \rhd \tau_1 + \cdots + \tau_n
+%    & \text{if} \quad \exists 0 \le i \le n .~\tau \rhd \tau_i \\
+%  \mu X . \tau & \rhd \mu X . \tau' & \text{if} \quad \tau \rhd \tau' \\
+%  \tau & \rhd X \\
+%\end{align*}
+%
+%Then we can extend the variable and function application clauses in the
+%definition of $\PLVal(\cdot)$:
+%
+%\begin{align*}
+%  e & \rhd x & \text{if} \quad e : \tau_e,~x : \tau_x,~\tau_e \rhd \tau_x \\
+%  e & \rhd f~e_1~\dots~e_n &
+%    \text{if} \quad e : \tau_e,~f : \tau \leftrightarrow \tau_f,~\tau_e \rhd \tau_f \\
+%\end{align*}
+%
+%Knowing the types is literally zero helpful though, as every leaf expression
+%\emph{must} have the same type for the function to be well types.

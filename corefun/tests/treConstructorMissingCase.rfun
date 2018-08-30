@@ -1,0 +1,14 @@
+----
+--
+-- Program fails tranformation as a case-expression over a variant is missing a
+-- case for a variant constructor.
+--
+----
+
+type RPS = Rock | Paper | Scissors
+
+f :: RPS
+f m = case m of
+    Rock -> Paper,
+    Paper -> Scissors
+  esac

@@ -1,0 +1,1014 @@
+% !TEX root = main.tex
+
+\chapter{Programming in \rfunc}\label{sec:prog}
+
+Although \rfunc is a r-Turing complete language, it lacks many of the
+convenient features of most modern functional languages. Luckily, we can encode
+many language constructs directly as syntactic transformations from a
+notationally light language to the formal core language.
+
+The principle encompasses that for each category of syntactic abstraction, we
+can show that there exists a systematic translation from the notationally light
+language to \rfunc. This allows us to introduce a number of practical
+improvements without the necessity to corroborate their correctness by either
+the type system or operational semantics, instead opting to present a
+\emph{translation scheme}.
+
+A translation scheme $e \defeq e'$ replaces the program text $e$ with $e'$,
+with $e$ being a valid expression in the light language and $e'$ being a valid
+\rfunc expression. A successful transformation therefore does not entail that a
+well-typed program is generated, only it is grammatically correct. Often, a
+translation will depend on recursive descent over the expression. In these
+cases, we express a translation as $\langle e \rangle$ (so an inner translation
+is notated as $\langle e' \rangle$ with $e'$ being some subexpression of $e$.
+Sometimes, we require some auxiliary information to be present for a
+translation. In these cases, we express a translation as $\langle e, s
+\rangle$, where the translation for $e$ depends the value $s$. We will make
+clear for each translation what is going on.
+
+\section{Variants}\label{sec:variants}
+
+Variants, also known as tagged unions, are related to algebraic data types.
+They provide a method of declaring new data types as a fixed number of named
+alternatives. In \rfunc they generalize recursive types, sum types, and
+case-expressions over these. A variant declaration is of the form:
+
+\begin{align*}
+  \beta = \texttt{v}_1 \mid \dots \mid \texttt{v}_n
+\end{align*}
+
+This defines a new data type (a variant type) identified by $\beta$.
+Constructing a value of a variant type entails choosing exactly one of the
+possible \emph{variant constructors} $\texttt{v}_1, \dots, \texttt{v}_n$ and
+potentially grant it data to carry. Then, given a variable of a variant type,
+we pattern match over its possible constructor forms to unveil the data and to
+control program flow.
+
+We have seen that we can generalize binary sums $\tau_1 + \tau_2$ to $n$-ary
+sums by repeated sum types in the right component $\tau_2$, and that we can
+chain together case-expressions to match the correct arm of such a sum. We
+choose an encoding of variants which exploits this pattern. This works because
+the variant constructors are ordered in the declaration and will
+deterministically match with the respective position in the $n$-ary sum.
+
+For a variant which carries no data, the translation corresponds to stripping
+away the variant constructor tags, leaving us with the underlying $n$-sum type
+of all unit types:
+
+\begin{align*}
+  \beta = \texttt{v}_1 \mid \dots \mid \texttt{v}_n \defeq \beta = 1 + \dots + 1
+\end{align*}
+
+We can further extend variants to carry data by adding parameters. We allow
+generic type parameters by adding a type parameter to the variant declaration.
+The syntax for variant declarations becomes:
+
+\begin{align*}
+  \beta~\alpha^* = \texttt{v}_1~[\tau\alpha]^* \mid \dots \mid \texttt{v}_n~[\tau\alpha]^*
+\end{align*}
+
+Where $[\tau\alpha]^*$ signifies zero or more constructor parameters of either
+a type (allowing for inner variants) \emph{or} type variables supplied to
+$\beta$.
+
+If exactly one parameter $\tau$ is present for a constructor \texttt{v}$_i$, the
+type at position $i$ in the $n$-ary sum is changed from the unit type to the
+type $\tau$.
+
+\begin{align*}
+  \beta~\alpha = \texttt{v}_1 \mid \texttt{v}_2~\tau \mid \texttt{v}_3~\alpha
+  \defeq \beta~\alpha = 1 + \tau + \alpha
+\end{align*}
+
+Notice that we may generalize any parameter-free variant constructor to one
+with a single parameter of type unit, which we omit from the syntax.
+
+If a variant constructor \texttt{v}$_i$ has $m \ge 2$ parameters $p_1, \dots,
+p_m$ , the type in the position of $i$ in the $n$-ary sum is changed into a
+product type $p_1 \times \dots \times p_m$.
+
+\begin{align*}
+  \beta = \texttt{v}_1 \mid \dots \mid \texttt{v}_i~\tau_1 \dots \tau_m \mid \dots
+  \defeq \beta =  1 + \dots + \tau_1 \times \dots \times \tau_m + \dots
+\end{align*}
+
+There is one more case we need to take into consideration for transformation:
+Recursively defined variants. In the following we use the subscript $i$ to
+indicate that the variant we are declaring has been indexed by $i$ in the
+family of possible variant names. The principle goes that if any of the variant
+constructors for a variant type $\beta_i$ have a self-referencing parameter (a
+parameter of type $\beta_i$), the translated type of $\beta_i$ is recursive and
+a fresh variable is designated as the recursion variable.
+
+\begin{align*}
+  &\beta_i = \texttt{v}_1 \mid \texttt{v}_2~\beta_i
+  \defeq \beta_i = \mu X.1 + X & \text{$X$ is a fresh type variable.}
+\end{align*}
+
+The above actually corresponds to an encoding of the natural numbers.
+
+When all variant declarations have been translated, we have generated a set
+VarDecs of named translations of the form $\beta = \tau$ where $\tau$ is a core
+type. We can define a translation of occurrences of variant types inductively
+over the core syntax of \rfunc, expanding variant types as we go. The
+interesting cases are:
+
+\begin{align*}
+  f \dots (x:\beta) \dots &\defeq f \dots (x:\tau) \dots
+  & \text{When $x$ is any parameter for $f$ and VarDecs$(\beta) = \tau$} \\
+  \roll{\beta}{e} &\defeq \roll{\tau}{e} &\text{When VarDecs$(\beta) = \tau$} \\
+  \unroll{\beta}{e} &\defeq \unroll{\tau}{e} &\text{When VarDecs$(\beta) = \tau$}
+\end{align*}
+
+The simplest variant declaration corresponds to the type \texttt{Bool} of
+Boolean values:
+
+\begin{align*}
+  \texttt{Bool} = \texttt{True} \mid \texttt{False} \defeq
+  \texttt{Bool} = 1 + 1
+\end{align*}
+
+The \texttt{Maybe} datatype is encoded as:
+
+\begin{align*}
+  \texttt{Maybe}~\alpha = \texttt{Nothing} \mid \texttt{Just}~\alpha \defeq
+  \texttt{Maybe} = 1 + \alpha
+\end{align*}
+
+While the encoding for generic lists exemplifies most of the translation rules
+for variant declarations simultaneously:
+
+\begin{align*}
+  \texttt{List}~\alpha = \texttt{Nil} \mid \texttt{Cons}~\alpha~(\texttt{List}~\alpha)
+  \defeq \texttt{List} = \mu X . 1 + \alpha \times X
+\end{align*}
+
+As mentioned earlier a variant value is an encoding of a nested number of sum
+terms which correspond to the ordering of the variant. We can define a general
+translation for variant values --- in the following we denote $|\beta|$ as the
+number of variant constructors a variant type has. We have:
+
+\begin{align*}
+  \texttt{v}_i~e_1 \dots e_n &\defeq
+    \textbf{inr}_1 (\dots (
+    \textbf{inr}_{i-1} (
+    \textbf{inl}_i ((e_1, \dots, e_n))) \dots )
+    &\text{When $i < |\beta|$} \\
+  \texttt{v}_i~e_1 \dots e_n &\defeq
+    \textbf{inr}_1 (\dots (
+    \textbf{inr}_{i} (e_1, \dots, e_n)) \dots )
+    &\text{When $i = |\beta|$} \\
+\end{align*}
+
+A handy result to keep in mind is that if two variant definitions have the same
+number of alternatives and carry data of identical types, they are isomorphic
+and may be encoded the same, which simplifies the translation scheme.
+
+The final critical transformation is obtaining a classical case-expression from
+a case over a variant value. In the light language we wish to write a case over
+a variant type as a single possible choice between all the variant constructors
+of the type of the variant value.
+
+\begin{rfuncode}
+  case $v$ of
+    $\texttt{v}_1~e_{1_1} \dots e_{1_j}$ => $e_1$
+           $\vdots$
+    $\texttt{v}_m~e_{m_1} \dots e_{m_k}$ => $e_m$
+\end{rfuncode}
+
+Where $v$ has type $\beta$ and $\texttt{v}_1, \dots, \texttt{v}_m$ are the
+variant constructors of $\beta$. We observe that we can exploit the encoding of
+variant values to unpack the data for each constructor. The construction is a
+bit more complex as we need to case over a chain of fresh variables. We
+therefore introduce the notation $\langle e, w \rangle$ to signify that $e$ is
+to be translated and $w$ is a fresh variable which should be cased over. Then the
+translation is defined recursively as a nested structure of binary
+case-expressions:
+
+\begin{align*}
+  &\langle \texttt{v}_i~e_{i_1}, \dots, e_{i_j} \Rightarrow e_i, w \rangle \defeq
+  \caseof{w}{\inl{(e_{i_1}, \dots, e_{i_j})}}{e_i}{\inr{w'}}{e'} \\
+  &\qquad\text{When $i < m$ and $w'$ is a fresh variable and $e' = \langle
+          w', v_{i+1}~e_{i_1}, \dots, e_{i_k} \Rightarrow e_{i + 1} \rangle$} \\
+  &\langle \texttt{v}_i~e_{i_1}, \dots, e_{i_j} \Rightarrow e_i, w \rangle \defeq
+  \lett{(e_{i_1}, \dots, e_{i_j})}{w}{e_i} \\
+  &\qquad\text{When $i = m$}
+\end{align*}
+
+A fully-fledged exampled of how variants are translated is presented in
+Fig.~\ref{fig:variant_translation}.
+
+\begin{figure}[ht!]
+  \centering
+  \begin{subfigure}[b]{0.90\textwidth}
+    \begin{rfuncodenum}
+Choice = Rock | Paper | Scissors
+
+rpsAI ($c$:Choice) =
+  case $c$ of
+    Rock => Paper
+    Paper => Scissors
+    Scissors => Rock
+    \end{rfuncodenum}
+    \caption{Light program.}
+  \end{subfigure}
+  ~
+  \begin{subfigure}[b]{0.90\textwidth}
+    \begin{rfuncodenum}
+rpsAI ($c$:1 + (1 + 1)) =
+  case $c$ of
+    inl(()) => inr(inl(()))
+    inr($w$) => case $w$ of
+      inl(()) => inr(inr(()))
+      inr(()) => inl(())
+    \end{rfuncodenum}
+    \caption{Core program.}
+  \end{subfigure}
+\caption{A full example of variant translations}\label{fig:variant_translation}
+\end{figure}
+
+\section{Top-level Function Cases}\label{subsec:top_level}
+
+A top-level function case is a generalization of inspecting the immediate form
+of the inputs to a function. This entails, contrary to the core language, that
+arguments are not necessarily named in the definition but are pattern matched
+on directly as expressions. A function definition is then given as a finite,
+strictly ordered set of $m$ \emph{function clauses}:
+
+\begin{align*}
+\{ f~e_{1_i} \dots e_{n_i} = e \mid 1 \le i \le m \}
+\end{align*}
+
+Where we denote the parameter expressions $e_{1_i} \dots e_{n_i}$ for each
+clause a \emph{clause pattern}. There are some restrictions on a function
+pattern:
+
+\begin{enumerate}
+
+  \item We require that no clause pattern matches another clause pattern
+    perfectly (we require the clause patterns to be orthogonal).
+
+  \item We require that the form of each expression in a clause pattern is
+    either a sum term, a variable name or a variant constructor. This is
+    necessary as case-expressions in the core language are only defined for sum
+    terms (and we saw in Sec.~\ref{sec:variants} that variants transform into
+    sum terms).
+
+  \item We require that there are no omitted clauses. This is to enforce
+    totality of the branches when the program has been transformed to the core
+    rendition, which does not support missing branches for sum terms.
+
+\end{enumerate}
+
+We enforce a particular ordering on the clauses. This is due to how the
+top-level case will be unfolded in the next transformation step. This ordering
+can be inferred, so strictly speaking we do not have to restrict the programmer
+from writing them in any arbitrary order (enforcing the proper ordering might
+be a good design choice nonetheless, as implicit reordering of clauses might
+cause confusion). We define the ordering on a parameter expression as:
+
+\begin{align*}
+  \inl{e} &\le \inr{e} & \\
+  \texttt{v}_i &\le \texttt{v}_j
+    & \text{When $\texttt{v}_i$ and $\texttt{v}_j$ are variant constructors of
+            the same type and $i \le j$.} \end{align*}
+
+And we define the ordering of clause patterns as the ordering parameter-wise,
+associated to the left.
+
+\begin{align*}
+    & f~e_{1_1} \dots e_{n_1} = \cdot
+  \le f~e_{1_2} \dots f~e_{n_2} = \cdot &
+  \text{if $e_{1_1} \le e_{1_2}, \dots, e_{n_1} \le e_{n_2}$}
+\end{align*}
+
+With an ordering in place, we may define function application of $f$ as
+evaluating the clause body of the first clause in the ordered set of clauses of
+$f$ for which each parameter expression matches the values supplied to the
+application. In the following, $f_s$ denotes a chain of increasing order of
+function clauses. We define an \emph{ordered traversal} as:
+
+\begin{align*}
+  (f~e_1 \dots e_n = e \le f_s)~c_1 \dots c_n
+  \begin{cases}
+    e & \text{if $c_1 \rhd e_1, \dots, c_n \rhd c_n$}  \\
+    (f_s)~c_1 \dots c_n & \text{otherwise}
+  \end{cases}
+\end{align*}
+
+That is, if the values supplied to the function application are applicable for
+a clause, evaluate the clause body. Otherwise, try the next clause. Since we
+assumed that clause coverage is total, this will always evaluate \emph{some}
+clause body.
+
+The translation should unfold a series of case-expressions which respect the
+order of clauses as described. An observation is that we can make a distinction
+between the parameters which vary and those that do not. Parameters that do not
+vary are necessarily variable names in every clauses and can be ignored.
+
+Another observation is that we can group the clauses by how each parameter
+expression is repeated to match on the subsequent parameter expression. This
+gives us a nested structure of sets akin a tree, where the clause bodies are
+the leafs. We have:
+
+\begin{align*}
+  \{ e_{1_i}~\{ e_{2_j}~\{ \dots \{ e_{i + j + \dots} \} \dots \}_j \}_i \mid 1 \le j \le q \} \mid 1 \le i \le p \}
+\end{align*}
+
+Where we have truncated the $m$ occurrences of pattern expressions in the first
+parameter into $k$ distinct expressions. The same characteristic holds for each
+parameter, and the process is then repeated recursively. The inner-most set is
+a singleton set containing the clause body for exactly the combination of
+pattern expression (which is reflected in its additive subscript). This
+structure tells us how to ``flatten'' the clauses into individual
+case-expressions.  Each instance of a group is recursively asked to flatten. In
+the following, $x$ is a fresh variable name and $a$ and $b$ are placeholders
+for the ordering of parameters. We have:
+
+\begin{align}
+  &\langle \{ e_{a_i}~\{ e_{b_j}~\{ \dots \} \} \mid 1 \le j \le q \}_i \mid 1 \le i \le p \} \rangle \defeq   \label{def:clause_translation} \\
+  &\smpcase{x}{e_{a_1} \Rightarrow \langle \{ e_{b_j}~\{ \dots \} \mid 1 \le j \le q \}_1 \rangle \dots e_{a_p} \Rightarrow \langle \{ e_j~\{ \dots \} \mid 1 \le j \le q \}_p} \rangle \nonumber
+\end{align}
+
+And the bottom case:
+
+\begin{align}
+  &\langle \{ e_{a_i}~\{ e_i \} \mid 1 \le i \le p \} \rangle \defeq
+  \smpcase{x}{e_{a_1} \Rightarrow e_1, \dots, e_{a_k} \Rightarrow e_p}
+\label{def:clause_translation_bottom}
+\end{align}
+
+A clear issue with translating the current translation scheme is the apparent
+loss of type information for parameters. In the core language we require that
+parameters are given in the form $(x:\tau)$. Transforming name-less expressions
+into fresh variable names is trivial, but omitting type information requires
+that we provide full type inference. Therefore we also require a top-clause
+whose only purpose is to pair up with the parameters in the core language. A
+complete function definition becomes
+
+\begin{align*}
+  &f :: \alpha_1 \dots \alpha_m~.~\tau_1 \rightarrow \dots \rightarrow \tau_n \\
+  &\{ f~e_{1_i} \dots e_{n_i} = e \mid 1 \le i \le m \}
+\end{align*}
+
+The clauses are translated with regards to~(\ref{def:clause_translation})
+and~(\ref{def:clause_translation_bottom}), giving $e_{body}$, while the
+function as a whole is translated as:
+
+\begin{align*}
+  \begin{array}{l}
+    f :: \alpha_1 \dots \alpha_m~.~\tau_1 \rightarrow \dots \rightarrow \tau_n \\
+    \{ f~e_{1_i} \dots e_{n_i} = e \mid 1 \le i \le m \}
+  \end{array} \defeq
+  f~\alpha_1 \dots \alpha_m~(x_1: \tau_1) \dots (x_n: \tau_n) = e_{body}
+\end{align*}
+
+We show the translation of a top-level cases with a translation of a map
+function. The translation is shown in Fig.~\ref{fig:top_level_translation}.
+
+\begin{figure}[ht!]
+  \centering
+  \begin{subfigure}[b]{0.90\textwidth}
+    \begin{rfuncodenum}
+map :: $\alpha~\beta~(\alpha \leftrightarrow \beta) \rightarrow \mu X . 1 + \alpha \times X$
+map $f$ inl(()) = roll [$\mu X . 1 + \beta \times X$] inl(())
+map $f$ inr($(x, xs')$) = let $x' = f~\alpha~x$
+                           $xs''$ = map $f~\alpha~\beta~xs'$
+                       in roll [$\mu X . 1 + \beta \times X$] inr(($x', xs''$))
+    \end{rfuncodenum}
+  \caption{Light program.}
+  \end{subfigure}
+  ~
+  \begin{subfigure}[b]{0.90\textwidth}
+    \begin{rfuncodenum}
+map $\alpha~\beta~(f: \alpha \leftrightarrow \beta))~(xs: \mu X . 1 + \alpha \times X)$ = case unroll [$\mu X . 1 + \alpha \times X$] $xs$ of
+  inl(()) => roll [$\mu X . 1 + \beta \times X$] inl(())
+  inr($(x, xs')$) => let $x' = f~\alpha~x$
+                       $xs''$ = map $f~\alpha~\beta~xs'$
+                   in roll [$\mu X . 1 + \beta \times X$] inr(($x', xs''$))
+    \end{rfuncodenum}
+  \caption{Core program.}
+  \end{subfigure}
+\caption{An example of a top-level case translation.}\label{fig:top_level_translation}
+\end{figure}
+
+\section{Guards}
+
+When we have added support for a generalized top-level function case as seen in
+Sect.~\ref{subsec:top_level}, it is natural to consider \emph{guards} as well.
+Guards are additional requirements on the form of the clause pattern $e_1 \dots
+e_n$ of any particular clause of a function $f$. Each guard is associated with
+one and only one clause in the form of an additional expression $g$ where $g$
+always evaluates to $1 + 1$ (a Boolean value). A clause becomes:
+
+\begin{align*}
+f~e_1 \dots e_n \mid g = e
+\end{align*}
+
+During a function application $f$ with canonical values $c_1 \cdots c_n$
+substituted for the parameters of $f$, $g$ has the values $c_1 \dots c_n$ in
+scope.
+
+Each top-level pattern may now be repeated multiple times in the function
+declaration, so we lax the requirement of orthogonality of clauses, but with a
+new guard for each repetition. Each match of a clause pattern then in actuality
+matches a set of clauses, which we call a \emph{cluster}. Again, we impose an
+order on a cluster of clauses. We order them by position of definition, since
+there is no intrinsic order of the guards, with on exception: The default guard
+is always the top element. We then perform an ordered traversal to discern
+which clause-body should be taken. Denote a pattern by $p$. We have:
+
+\begin{align*}
+  \begin{array}{c}
+    f~p \mid g_1 = e_1 \\
+      \vdots \\
+    f~p \mid g_n = e_n
+  \end{array}
+  \Leftrightarrow g_1 = e_1 \le \dots \le g_n = e_n \\
+\end{align*}
+
+Notice that the same pattern $p$ occurs in every clause above. We define the
+ordered traversal $- \le -$ for guards similarly as to top level function-cases
+by
+
+\begin{align*}
+  g = e \le g_s
+  \begin{cases}
+    e & \text{if } g \downarrow \inl{()} \\
+    g_s & \text{if } g \downarrow \inr{()}
+  \end{cases}
+\end{align*}
+
+To make sure that the ordered traversal is total, we require that a default
+guard in the form of a keyword \textbf{otherwise} is supplied for each pattern
+which has guards. This is simply translated directly to an $\inl{()}$
+expression. As for the restrictions on top-level cases, this ensures that
+\emph{some} clause body always will be evaluated. We require totality to
+guarantee that we always can generate every arm in a case-expression in the
+core language. Note that an omitted guard for a clause $f~p = e$ can be
+generalized to a clause containing a guard which is always passed (so $f~p = e
+\Leftrightarrow f~p \mid \inl{()} = e$).
+
+We show a translation scheme from a top-level case function which has guards
+into a top-level case function which does not have guards. By this we impose an
+order of translations so that a translation of guards must occur before a
+translation of top-level case functions.
+
+Assume we have partitioned the function clauses into clusters. We first show
+the translation of a particular cluster. The translation does not depend on the
+structure of the clause besides the guard and clause body itself, so we omit
+them.
+
+\begin{align*}
+  \bot = e_1 &\defeq e_1 \\
+  g_1 = e_1 \le g_2 = e_2 \le \dots \le g_n &\defeq \caseof{g_1}{\inl{()}}{e_1}{\inr{()}}{g'} \\
+    &\text{When $g'$ is the translation of $g_2 \le \dots \le g_n$}
+\end{align*}
+
+\begin{align*}
+  \{ f~e_{i_1}~\dots~e_{i_m} \mid g_i = e_i \mid 1 \le i \le n \} \defeq
+  \{ f~e_{i'_1}~\dots~e_{i'_m} = g_i' \mid 1 \le i' \le m' \} \\
+    \text{When $g'$ is the guard-translation for the cluster $i'$.}
+\end{align*}
+
+An example of translation of guards is presented in
+Fig.~\ref{fig:guards_translation}.
+
+\begin{figure}[ht!]
+  \centering
+  \begin{subfigure}[b]{0.90\textwidth}
+  \begin{rfuncodenum}
+tryPred :: $\mu X . 1 + X$
+tryPred x | case unroll [$\mu X . 1 + X$] $x$ of
+              inl(()) => inl(()),
+              inr($x'$) => inr(()) = inl(())
+tryPred x | otherwise = let $x'$ = unroll [$\mu X . 1 + X$] $x$ in inr($x'$)
+  \end{rfuncodenum}
+  \caption{Light program.}
+  \end{subfigure}
+  ~
+  \begin{subfigure}[b]{0.90\textwidth}
+    \begin{rfuncodenum}
+tryPred :: $\mu X . 1 + X$
+tryPred x = case unroll [$\mu X . 1 + X$] $x$ of
+              inl(()) => inl(())
+              inr(()) => let $x'$ = unroll [$\mu X . 1 + X$] $x$ in inr($x'$)
+    \end{rfuncodenum}
+  \caption{Core program.}
+  \end{subfigure}
+  \caption{A translation of guards.}\label{fig:guards_translation}
+\end{figure}
+
+\section{Type Classes}
+
+Type classes, introduced in~\cite{Wadler:1989} and later popularised in
+Haskell~\cite{Hall:1996}, are aimed at solving overloading of operations by
+allowing types to implement or infer a type class. A type class $\kappa$ is a
+collection of function names (called \emph{operations}) with accompanying type
+signatures $\{ f \Rightarrow \tau_f \mid f \in \kappa \}$, which are the
+operations to be inferred when the type class is instantiated for a type
+$\alpha$ (where $\alpha$ is a type variable). $\tau_f$ may naturally contain
+$\alpha$. The syntax for type classes is as follows
+
+\begin{align*}
+  \textbf{class } \kappa~\alpha \textbf{ where } [f \Rightarrow \tau_f]^+
+\end{align*}
+
+Where $[\cdot]^+$ denotes one or more instances of $\cdot$ (in this case
+functions and function signatures which belong to the class). Functions with
+generic types which apply types on operation which belong to a type class can
+be provided a \emph{context} which specifies that a type class instance is
+written for that type.
+
+\begin{align*}
+  f~\kappa~\alpha \Rightarrow \alpha~.~(x_1:\tau_1) \dots (x_n:\tau_n) = e
+\end{align*}
+
+Where the types $\tau_1 \dots \tau_n$ may include $\alpha$ and $e$ may contain
+applications of operations from $\kappa$ on terms of type $\alpha$. An instance
+of a particular type class $\kappa$ for a type $\tau$ then instantiates the
+operations for $\tau$, allowing us to call $f$ with $\tau$ substituted for
+$\alpha$.
+
+\begin{align*}
+  \instance{\kappa~\tau}{[f~x^+ \Rightarrow e]^+}
+\end{align*}
+
+Where for each $f \in \kappa$ we have that there is a correlation between the
+number of parameters $x$ in the operation implementation and the number of
+types in the signature for $f$. For simplicity we require that operation names
+are unique. That is, operation names are accessible through the global function
+scope as any other function.
+
+A function application with an overloaded function name still requires that the
+type variable be manually applied, as type classes do not give any notion of
+type inference. This is clear from the following example, as a function's
+context may include the same type class for two different type variables. We
+show the example in the syntax given by a top level function case:
+
+\begin{align*}
+  &\begin{array}{l}
+  f :: \kappa~\alpha,~\kappa~\beta \Rightarrow \alpha~\beta~.~\alpha \rightarrow \beta \\
+  f~x~y = g~y
+  \end{array}
+  &\text{Where $g \in \kappa$}
+\end{align*}
+
+Which instance for $g$ between $\alpha$ and $\beta$ should be dispatched to?
+Although it is obvious that the correct instantiation is $\beta$ in this case,
+it requires type inference for $y$, which is not considered in this work.
+
+In the original introduction of type classes, instances of type classes may
+declare an \emph{instance context} $\theta$ for the type $\tau$ which the
+instance is being declared for. An instance context dictates which instances
+must exist for the types which comprise $\tau$ (including $\tau$ itself),
+before the instance can be written. For example, this allows us to describe
+that we may write an instance for a type class $\kappa$ of \texttt{List}
+$\alpha$ iff. $\alpha$ is already a member of $\kappa$ --- denoted
+$\kappa~\alpha \Rightarrow \kappa~(\texttt{List}~\alpha)$.  This has two
+functions:
+
+\begin{enumerate}
+
+  \item We can describe a hierarchy of type classes although we only require
+    one type class to be instantiated in the context of a function.
+
+  \item We can write type classes for types which have free type variables,
+    when the type class' operations require that the type variable also is an
+    instance of the same type class.
+
+\end{enumerate}
+
+We will omit instance contexts in this work for simplicity. This severely
+hinders the usefulness of type classes as we cannot write type class instances
+for types which have free type parameters (like \texttt{List}), but this
+limitation can easily be remedied in a more extensive implementation.
+
+We will now show a type class translation scheme. The principle is to strip
+away all definitions and instances of classes and treat each instance member
+as a top level function definition. An obvious method is to create unique
+functions for each instance which specialize for that instance type. We can do
+this as the class provides us with the function type and the instance provides
+us with the function implementation. We have:
+
+\begin{align*}
+  &\begin{array}{l}
+    \textbf{class } \kappa~\alpha \textbf{ where } \Rightarrow \alpha \leftrightarrow \tau' \\
+    \instance{\kappa~\tau}{f~x \Rightarrow e}
+  \end{array} \defeq
+  f_\tau~(x:\tau) = e &
+  \text{$f_\tau$ is a fresh function name}
+\end{align*}
+
+Additionally, any function $g$ in which an application of a member function $f$
+from a class $\kappa$ occurs, we need to change the application to the newly
+generated $f_\tau$. There are two distinct transformations we must consider here:
+
+\begin{enumerate}
+
+  \item $\kappa$ is in the context of $g$. This means That $g$ takes a type
+    variable which is restricted by $\kappa$, and some class member function of
+    $\kappa$ occurs in the body of $g$. As we wish to remove the context, the
+    type variable shall be removed as well, and any application of it shall
+    instead call the member function of $\kappa$. This means $g$ must also be
+    made into a fresh function.
+
+    \begin{align*}
+      &\begin{array}{l}
+        g :: (\kappa~\alpha) \Rightarrow \alpha~.~\alpha \\
+        g~x = f~\alpha~x
+      \end{array}
+      \defeq
+      \begin{array}{l}
+        g :: \tau \\
+        g_\tau~x = f_\tau~x
+      \end{array} \\
+      &\qquad\text{When $\tau$ is an instance of $\kappa$ and $f$ is a member of $\kappa$}
+    \end{align*}
+
+  \item An application of a class member function $f$ of $\kappa$ occurs in
+    $g$, but with a valid concrete type (meaning, a concrete type for which an
+    instance exists). In this case the type variable application should just be
+    removed and the correct member function be applied instead:
+
+    \begin{align*}
+      &g~(x:1) = f~1~x \defeq g~(x:1) = f_1~x \\
+      &\qquad\text{When $1$ is an instance of $\kappa$ and $f$ is a member of $\kappa$}
+    \end{align*}
+
+\end{enumerate}
+
+A strong benefactor of type classes is equality testing. Equality as a
+type class can, with variants, replace the duplication/equality operator
+through the following definition of equality:
+
+\begin{rfuncode}
+  Eq 'a = Eq | Neq 'a
+\end{rfuncode}
+
+Which should be interpreted as: Either we have that $x = y$ and thus
+\lstinline{eq $x$ $y$ => Eq}, or we have that $x \neq y$ and
+\lstinline{eq $x$ $y$ => Neq $y$}. Recall that since $x$ is an ancilla, it
+is tacitly returned from an equality check.  Thus when $x = y$, $y$ can be
+destroyed as its original value is preserved in $x$ --- otherwise, we have to
+remember $y$. In the example in Fig.~\ref{fig:type_classes_translation} we
+present a simpler version of an Equality type class which states equality of
+values as a form of attribute of two values which consumes neither value. An
+attribute in this fashion can always be extracted by transforming a unit value,
+which explains the signature of \texttt{eq}.
+
+\begin{figure}[ht!]
+  \centering
+  \begin{subfigure}[b]{0.90\textwidth}
+    \begin{rfuncodenum}
+class Eq $\alpha$ where
+  eq => $\alpha$ -> $\alpha$ -> 1 <-> (1 + 1)
+
+instance Eq ($\mu X . 1 + X$) where
+  eq $n_0$ $n_1$ () => case unroll [$\mu X . 1 + X$] $n_0$ of
+                   inl() = case unroll [$\mu X . 1 + X$] $n_1$ of
+                     inl() => inl(())
+                     inr($n_1'$) => inr(())
+                   inr($n_0'$) = case unroll [$\mu X . 1 + X$] $n_1$ of
+                     inl() => inr(())
+                     inr($n_1'$) => eqInt $n_0'$ $n_1'$ ()
+
+compare (Eq $\alpha$) => $\alpha$ ($x_1$: $\alpha$) ($x_2$: $\alpha$) = eq $\alpha$ $x_1$ $x_2$ ()
+
+eqNil ($x$: $\mu X . 1 + X$) = compare ($\mu X . 1 + X$) $x$ (roll [$\mu X . 1 + X$] inl(()))
+    \end{rfuncodenum}
+    \caption{Light program.}
+  \end{subfigure}
+  ~
+  \begin{subfigure}[b]{0.90\textwidth}
+    \begin{rfuncodenum}
+eqNat ($n_0$: $\mu X . 1 + X$) ($n_1$: $\mu X . 1 + X$) (): 1 = case unroll [$\mu X . 1 + X$] $n_0$ of
+  inl() = case unroll [$\mu X . 1 + X$] $n_1$ of
+    inl() => inl(())
+    inr($n_1'$) => inr(())
+  inr($n_0'$) = case unroll [$\mu X . 1 + X$] $n_1$ of
+    inl() => inr(())
+    inr($n_1'$) => eqNat $n_0'$ $n_1'$ ()
+
+compareNat ($x1$: $\mu X . 1 + X$) ($x2$: $\mu X . 1 + X$) = eqNat $x1$ $x2$ ()
+
+eqNil ($x$: $\mu X . 1 + X$) = compareNat $x$ (roll [$\mu X . 1 + X$] inl(()))
+    \end{rfuncodenum}
+    \caption{Core program.}
+  \end{subfigure}
+  \caption{Translation of type classes.}\label{fig:type_classes_translation}
+\end{figure}
+
+\section{Records}
+
+Records are products of labeled elements of arbitrary types. They generalize
+products and product indexing by supporting component-wise projections and
+local updates.~\cite{Cardelli:1992} considers \emph{extensible records} for
+System F with proper subtyping and equality for records which may be extended
+(by a label which is a type variable) as well as \emph{simple records}
+(records of a fixed label cardinality). We will adopt a notion similar to a
+simple record in \rfunc.
+
+The first major deviation from the simple records of~\cite{Cardelli:1992} we
+will enforce is totality of a record instantiation. Simple records as described
+in the literature allow records to be partially populated, using \emph{row
+variables} to postpone instantiation of any number of record components. We
+enforce totality because we look to guarantee that we can directly translate a
+record into the core language by writing an ordered $n$-ary product, where $n$
+is the record's cardinality. Note that totality exempts us from having to define a
+subtyping relation between records of different ``definitiveness''. Combining
+simplicity and totality of records means we can completely omit subtyping as a
+necessary property of records.
+
+Second, we disallow arbitrary projections, for the obvious reason that
+projections destroy information. Notice that projections were omitted in
+\rfunc's grammar as well, a pivotal difference from regular functional
+programs, necessary to maintain reversibility. What we instead want to do to
+support projections is to introduce a special type of scope, instantiated for a
+specific record $\gamma$ individually, in which we may fetch and change any
+number of labels for $\gamma$. Any remaining labels are then automatically
+assumed to be invariant.
+
+A record is defined as
+
+\begin{align*}
+  \gamma = \{ l_1 :: \tau_1, \dots, l_n :: \tau_n  \}
+\end{align*}
+
+Where $\gamma$ ranges over record names. A record value is constructed by
+assigning a variable name to a record constructor amongst the records which
+have been defined. Each label of the record needs to be supplied a value (or
+expression which evaluates to a value) of the type declared for that label in
+the record definition.
+
+We denote $\pi$ as a permuting function over a set of assignments to labels, so
+that labels may be assigned in any order. The full set of permuting functions
+$l_n$ for any given label cardinality $n$ is the product of possible assignment
+orders. An exemplary permuting function $\pi \in l_4$ is:
+
+\begin{align*}
+  \begin{array}{llll}
+    \pi(1) = 3, & \pi(2) = 1, & \pi(4) = 2, & \pi(1) = 4
+  \end{array}
+\end{align*}
+
+A permutation is necessarily bijective. The identity permutation
+$\text{id}_\pi$ sends every label to itself, so $\text{id}_\pi (a) = a$. We
+have
+
+\begin{align*}
+  \pi(\{ l_1 = c_1, \dots, l_n = c_n \})
+    = \{ \pi(l_1 = c_1), \dots, \pi(l_n = c_n) \}
+\end{align*}
+
+Because a permutation is bijective, any particular permutation has an inverse
+so that $\pi^{-1} \pi = \text{id}_\pi$, meaning we can always order the label
+assignments in a record declaration by applying an inverse permutation. A full
+construction of a record $\gamma_i = \{ l_1 :: \tau_1, \dots, l_n :: \tau_n \}$
+can now be described as
+
+\begin{align*}
+  &\lett{r}{\gamma_i~\pi(\{ l_1 = c_1, \dots, l_n = c_n \})}{e}
+  & \text{where } c_1 : \tau_1, \dots, c_n : \tau_n \text{ and } \pi \in l_n
+\end{align*}
+
+We now present a translation scheme for record construction. Recall that we
+denote the $n$-ary product $\tau_1 \times \cdots \times \tau_n$ as nested
+application of binary products. Now, we first need to find the $\pi^{-1}$ for
+whatever permutation was induced for the construction of $\gamma_i$. This can
+easily be done as we want to invert the position of each label into the
+ordering of the labels in the record definition, which is statically decidable.
+After the fact that the product is ordered, this turns projection into a
+deterministic traversal into the $n$-ary product.
+
+Now we introduce the \emph{record scope}. In the record scope we may freely
+extract and update values within the record for which we open a record scope.
+The syntax is
+
+\begin{align*}
+  \within{\gamma}{e^\rho}
+\end{align*}
+
+$e^\rho$ is an extended grammar for expressions where we add the following
+expression constructs:
+
+\begin{itemize}
+
+  \item $e ::= \rho(\gamma, l_i)$
+
+  \item $e ::= \lett{\rho(\gamma, l_i)}{e}{e}$
+
+\end{itemize}
+
+Where $\rho(r, l_i)$ is a projection which returns the cell within the record
+$\gamma$ for the label $l_i$. We denote $\rho(\gamma, l_i)$ as $\gamma.l_i$ in
+the syntax. The two expression constructs thus respectively read the value
+associated with a label in a record and write to a label associated with a
+record. We expect that the value returned from a record scope is the record
+itself. Because we still allow arbitrary expressions in the record scope, we
+want the inner expression to result in one of two things: 1) The variant
+itself, 2) A variant assignment.  Any other expression is ill-formed.
+
+In the transformation of a record scope we initially expose the full structure
+of the record at the entry point to the scope, which in itself allows
+projections as the variable names are now uncovered. The translation of an
+expression $\rho(\gamma, l_i)$ is substituted with the $i$'th component of the
+record product:
+
+\begin{align*}
+  &\within{\gamma}{\gamma} \defeq \lett{(x_1, \dots, x_n)}{\gamma}{(x_1, \dots, x_n)} \\
+  &\qquad\text{When $\gamma$ is a variable which a record is bound to and $|\gamma| = n$}
+\end{align*}
+
+An assignment to a record cell is translated into a regular let-expression with
+an assignment to a fresh variable. The exit of the record scope then
+reconstructs the record product with the new assignments in place of the old
+cells.
+
+\begin{align*}
+  &\within{\gamma}{\lett{\gamma . l_1}{\gamma . l_1}{\gamma}} \defeq
+  \lett{(x_1, \dots, x_n)}{\gamma}{\lett{x_1'}{x_1}{(x_1', \dots, x_n)}} \\
+  &\qquad\text{When $\gamma$ is a variable which a record is bound to and $|\gamma| = n$}
+\end{align*}
+
+We show the transformation of a declaration of three-dimensional
+\texttt{Vector} record and a function which uses it.
+
+\begin{figure}[htp]
+  \centering
+  \begin{subfigure}[b]{0.90\textwidth}
+    \begin{rfuncodenum}
+Vector = { x: $\mu X . 1 + X$, y: $\mu X . 1 + X$, z: $\mu X . 1 + X$ }
+
+$f~(x: \mu X . 1 + X)~(y: \mu X . 1 + X)~(z: \mu X . 1 + X)$ =
+  let $v$ = Vector { x = $x$, y = $y$, z = $z$ }
+  in within $v$:
+       $v.x$ = roll [$\mu X . 1 + X$] inr($v.x$)
+     end
+    \end{rfuncodenum}
+    \caption{Light program.}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.90\textwidth}
+    \begin{rfuncodenum}
+$f~(x: \mu X . 1 + X)~(y: \mu X . 1 + X)~(z: \mu X . 1 + X)$ =
+  let $v$ = $(x, (y, z))$
+  in let $x'$ = roll [$\mu X . 1 + X$] inr($x$)
+    in $(x', (y, z))$
+    \end{rfuncodenum}
+    \caption{Core program.}
+  \end{subfigure}
+  \caption{Translation of records.}\label{fig:record_translation}
+\end{figure}
+
+\section{Arbitrarily Sized Products}
+
+\rfunc only supports binary products in product construction and when pattern
+matching on the left-hand side of let and case-expressions, as can be noted in
+the language grammar. Here, we will detail a method of pattern matching on
+arbitrarily sized products in a single expression. There are essentially three
+locations we may encounter $n$-ary products:
+
+\begin{enumerate}
+
+  \item While constructing product values. Example:
+
+    \begin{align*}
+      f~(x: \tau) = (x, e_2, e_3)
+    \end{align*}
+
+    Translating a constructed product with $n$ elements is as simple as
+    repeatedly wrapping the right component into nested products where any
+    inner product is solely binary. We define a recursive translation operation
+    $\langle \cdot \rangle$ as:
+
+    \begin{align*}
+      \langle (e_1, e_2) \rangle &\defeq (e_1, e_2) \\
+      \langle (e_1, e_2 \dots, e_n) \rangle &\defeq (e_1, (\langle e_2, \dots e_n \rangle))
+    \end{align*}
+
+  \item When pattern matching on the left-hand side of a let-expression. Example:
+
+    \begin{align*}
+      g~(x: \tau) = \lett{(a, b, c)}{f~x}{(a, b, c)}
+    \end{align*}
+
+    Here we need to exploit the syntax of the let-expression of the core
+    language, which binds expressions of a product type on the left hand side
+    of the assignment. We can unfold the full product by introducing a
+    let-expression for each element of the product with a fresh variable name
+    in the right component and the values of the product in the left component.
+    We have:
+
+    \begin{align*}
+      \langle \lett{(x_1, x_2)}{e_1}{e_2} \rangle &\defeq \lett{(x, y)}{e_1}{e_2} \\
+      \langle \lett{(x_1, x_2, \dots, x_n)}{e_1}{e_2} \rangle &\defeq \textbf{let }(x_1, x') = \langle \lett{(x_2, \dots x_n)}{x'}{e_2} \rangle \\
+        &\text{Where $x'$ is a fresh variable}
+    \end{align*}
+
+  \item When pattern matching on the left-hand side of a case-expression.
+    Example:
+
+    \begin{align*}
+      \caseof{h~x}{\inl{(a, b, c)}}{(a, b, c)}{\inr{x}}{x}
+    \end{align*}
+
+    In this example we expect $x$ to be of some type $\tau_1 \times \tau_2
+    \times \tau_3 + \alpha$. An analogous condition exists for a pattern match
+    for the right branch.
+
+    Case-expressions actually cannot pattern match over values at all, so we
+    introduce a pattern matching let-expression immediately in the body $e$
+    when we unfold a product. This allows us to use the translation from (2.)
+    immediately after. We introduce two rules, one for each branch. Should we
+    need to pattern match in both branches the rules can be used in unison:
+
+    \begin{align*}
+      &\langle \caseof{x}{\inl{(e_1, \dots, e_n)}}{e_1}{\inr{e'}}{e_2} \rangle \\
+      &\defeq \caseof{x}{\inl{x'}}{\langle \lett{(e_1, \dots, e_n)}{x'}{e_1} \rangle}{\inr{e'}}{e_2} \\
+      &\langle \caseof{x}{\inl{e'}}{e_1}{\inr{(e_1, \dots, e_n)}}{e_2} \rangle \\
+      &\defeq \caseof{x}{\inl{e'}}{e_1}{\inr{x'}}{\langle \lett{(e_1, \dots, e_n)}{x'}{e_2} \rangle} \\
+    \end{align*}
+
+\end{enumerate}
+
+Where $x'$ is a fresh variable. An example of arbitrarily sized products is
+presented in Fig.~\ref{fig:products_translation}.
+
+\begin{figure}[ht!]
+  \centering
+  \begin{subfigure}[b]{0.90\textwidth}
+    \begin{rfuncodenum}
+tripDup $(x: 1)$ = $(x, x, x)$
+
+$f$ $(x: 1)$ = let $(y, z, w)$ = tripDup $x$
+           in case inl(($y, z$)) of
+              inl(($y', z'$)) => ($y', z', w$)
+              inr(()) => ((), (), ())
+    \end{rfuncodenum}
+    \caption{Light program.}
+  \end{subfigure}
+  ~
+  \begin{subfigure}[b]{0.90\textwidth}
+    \begin{rfuncodenum}
+tripDup $(x: 1)$ = $(x, (x, x))$
+
+$f$ $(x: 1)$ = let $(y, t_1)$ = tripDup $x$
+            in let $(z, w)$ = $t_1$
+               in case inl(($y, z$)) of
+                 inl($t_2$) => let ($y', z'$)) = $t_2$ in ($y', z', w$)
+                 inr(()) => ((), ((), ()))
+    \end{rfuncodenum}
+    \caption{Core program.}
+  \end{subfigure}
+  \caption{Translation of arbitrarily sized products.}\label{fig:products_translation}
+\end{figure}
+
+\section{Multiple Let Bindings}
+
+Multiple variable bindings in a row are currently achieved using a nested chain
+of let-expressions. This can without further ado be reduced to a single
+let-expression in which with every binding occurs first, followed by an
+evaluation of the final expression. We have:
+
+\begin{align*}
+  \textbf{let } x_1 = e_1, \dots, x_n = e_n \textbf{ in } e
+\end{align*}
+
+And we define a translation as:
+
+\begin{align*}
+  \langle \lett{x_1}{e_1}{e} \rangle &\defeq \lett{x_1}{e_1}{e} \\
+  \langle \textbf{let } x_1 = e_1, x_2 = e_2 \dots, x_n = e_n \textbf{ in } e \rangle &\defeq
+  \lett{x_1}{e_1}{\langle \textbf{let } x_2 = e_2 \dots, x_n = e_n \textbf{ in } e} \rangle
+\end{align*}
+
+We show a translation of multiple nested let-expressions as a continuation of
+the map function, which was shown before as an example of a translation of
+top-level function clauses, in Fig.~\ref{fig:let_translation}.
+
+\begin{figure}[htp]
+  \centering
+  \begin{subfigure}[b]{0.90\textwidth}
+    \begin{rfuncodenum}
+map $\alpha$ $\beta$ ($f: \alpha \leftrightarrow \beta$) ($xs: \mu X . 1 + \alpha \times X$) = case unroll [$\mu X . 1 + \alpha \times X$] of
+  inl(()) => roll [$\mu X . 1 + \alpha \times X$] inl(()),
+  inr($xs'$) => let ($(x, xs'')$) = $xs'$
+                    $x'$ = $f$ $x$
+                    $xs'''$ = map $f$ $xs''$
+               in cons $x'$ $x'''$
+      \end{rfuncodenum}
+    \caption{Light program.}
+  \end{subfigure}
+  \begin{subfigure}[b]{0.90\textwidth}
+    \begin{rfuncodenum}
+map $\alpha$ $\beta$ ($f: \alpha \leftrightarrow \beta$) ($xs: \mu X . 1 + \alpha \times X$) = case unroll [$\mu X . 1 + \alpha \times X$] of
+  inl(()) => roll [$\mu X . 1 + \alpha \times X$] inl(()),
+  inr($xs'$) => let ($(x, xs'')$) = $xs'$
+               in let $x'$ = $f$ $x$
+                   in let $xs'''$ = map $f$ $xs''$
+                       in cons $x'$ $x'''$
+      \end{rfuncodenum}
+    \caption{Core program.}
+  \end{subfigure}
+  \caption{Translation of nested let-expressions.}\label{fig:let_translation}
+\end{figure}

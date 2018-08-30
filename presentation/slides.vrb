@@ -1,0 +1,11 @@
+\frametitle{Record Translation Example}
+
+  Translated core program.
+
+    \begin{rfuncode}
+$f~(x: \mu X . 1 + X)~(y: \mu X . 1 + X)~(z: \mu X . 1 + X)$ =
+  let $v$ = $(x, (y, z))$
+  in let $x'$ = roll [$\mu X . 1 + X$] inr($x$)
+    in $(x', (y, z))$
+    \end{rfuncode}
+

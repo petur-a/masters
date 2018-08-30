@@ -1,0 +1,21 @@
+type Bool = True | False
+
+and :: Bool -> Bool
+and True True = True
+and True False = True
+and False True = True
+and False False = False
+
+or :: Bool -> Bool
+or True True = True
+or True False = False
+or False True = False
+or False False = False
+
+not :: Bool
+not True = False
+not False = True
+
+if :: 'a . 'a * 'a -> Bool
+if bs False = let (x,y) = bs in x
+if bs True = let (x,y) = bs in y

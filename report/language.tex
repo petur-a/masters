@@ -1,0 +1,886 @@
+% !TEX root = main.tex
+
+\newcommand{\alignspace}{\vspace{-4mm}}
+
+\chapter{Formalisation of \rfunc}\label{sec:formal}
+
+The following section will present the formalisation of \rfunc. The language is
+intended to be minimal, but it will still accommodate future extensions to a
+modern style functional language. We first present a core language syntax,
+which will work as the base of all formal analysis. Subsequently we present
+typing rules and operational semantics over this language. The following is
+built on knowledge about implementation of type systems as explained
+in~\cite{Pierce:2002:TPL}.
+
+\section{Grammar}
+
+A program is a collection of zero or more function definitions. Each definition
+must be defined over some number of input variables as constant functions are
+not interesting in a reversible setting. All function definitions will in
+interpretation be available though a static context.  A typing of a program is
+synonymous with a typing of each function. A function is identified by a name
+$f$ and takes 0 or more type parameters, and 1 or more formal parameters as
+inputs. Each formal parameter $x$ is associated with a typing term $\tau$ at
+the time of definition for each function, which may be one of the type
+variables given as type parameter.  The grammar is given in
+Fig.~\ref{fig:grammar}.
+
+\begin{figure}[t]
+\begin{tabular}{p{.5\textwidth}l}
+$q ::= d^*$                                             & Program definition\\
+$d ::= f\ \alpha^*~v^+ = e$                             & Function definition\\
+$e ::= x$                                               & Variable name\\
+$\hspace{1.9em}\mid ()$                                 & Unit term\\
+$\hspace{1.9em}\mid \inl{e}$                            & Left of sum term\\
+$\hspace{1.9em}\mid \inr{e}$                            & Right of sum term\\
+$\hspace{1.9em}\mid (e, e)$                             & Product term\\
+$\hspace{1.9em}\mid \lett{l}{e}{e}$                     & Let-in expression \\
+$\hspace{1.9em}\mid \caseof{e}{\inl{x}}{e}{\inr{y}}{e}$ & Case-of expression\\
+$\hspace{1.9em}\mid f~\alpha^*~e^+$                     & Function application\\
+$\hspace{1.9em}\mid \roll{\tau}{e}$                     & Recursive-type construction \\
+$\hspace{1.9em}\mid \unroll{\tau}{e}$                   & Recursive-type deconstruction\\
+$l ::= x$                                               & Definition of variable\\
+$\hspace{1.9em}\mid (x, x)$                             & Definition of product \\
+$v ::= x:\tau_a$                                        & Variable declaration
+\end{tabular}
+
+\caption{Grammar of \rfunc. Program variables are denoted by $x$, and type
+variables by $\alpha$.}\label{fig:grammar}
+\end{figure}
+
+\section{Type System}
+
+Linear logic is the foundation for linear type theory. In linear logic, each
+hypothesis must be used exactly once. Likewise, values which belong to a linear
+type must be used exactly once, and may not be duplicated nor destroyed.
+However, if we accept that functions may be partial (a necessity for
+\emph{r-Turing completeness}~\cite{AxelsenGlueck:2016}), first-order data may
+be duplicated reversibly. For this reason, we may relax the linearity
+constraint to relevance, that is that all available variables \emph{must} be
+used at least once.
+
+A useful concept in reversible programming is access to ancillae, i.e. values
+that remain unchanged across function calls. Such values are often used as a
+means to guarantee reversibility in a straightforward manner.  To support such
+ancillary variables at the type level, a type system inspired by Polakow’s
+combined reasoning system of ordered, linear, and unrestricted intuitionistic
+logic~\cite{Polakow:2001} is used. The type system splits the typing contexts
+into two parts: a static one (containing ancillary variables and other static
+parts of the environment), and a dynamic one (containing variables not
+considered ancillary). This gives a typing judgment of $\con e : \tau$, where
+$\Sigma$ is the static context and $\Gamma$ is the dynamic context.
+
+\begin{figure}[t]
+\begin{align*}
+  \tau_f & ::= \tau_f \rightarrow \tau'_f
+        \mid \tau \rightarrow \tau'_f
+        \mid \tau \leftrightarrow \tau' \mid \forall X. \tau_f \\
+  \tau & ::=
+  1 \mid \tau \times \tau' \mid \tau + \tau' \mid X \mid
+           \mu X.\tau \\
+  \tau_a & ::= \tau \mid \tau \leftrightarrow \tau'
+\end{align*}
+\caption{Typing terms. Note that $X$ in this figure denotes any type
+variable.}\label{fig:typing}
+\end{figure}
+
+We discern between two sets of typing terms: primitive types and arrow types.
+This is motivated by a need to be careful about how we allow manipulation of
+functions, as we will treat all functions as statically known.
+
+The grammar for typing terms can be seen in Fig.~\ref{fig:typing}: $\tau_f$
+denotes arrow types, $\tau$ primitive types, and $\tau_a$ ancillary types
+(i.e., types of data that may be given as ancillary data).
+
+Arrow types are types assigned to functions. For arrow types, we discern
+between primitive types and arrow types in the right component of
+unidirectional application. We only allow primitive types in bidirectional
+application. This is to restrict functions to only being able to be bound to
+ancillary parameters. This categorizes \rfunc as a restricted higher-order
+language in that functions may be bound to variables, but only if they are
+immediately known. It is ill-formed for a type bound in the dynamic context to
+be of an arrow type --- if it were well-formed, we would be allowing the
+creation of new functions, which would break our assumption that all functions
+are statically known. We will detail the motivation for this restriction in
+Sect.~\ref{sect:higher_order}.
+
+Primitive types are types assigned to expressions which evaluate to canonical
+values by the big step semantics. These are distinctly standard, containing sum
+types and product types, as well as (rank-1) parametric polymorphic
+types\footnote{A rank-1 polymorphic system may not instantiate type variables
+with polymorphic types.} and a fix point operator for recursive data types
+(see~\cite{Pierce:2002:TPL} for an introduction to the latter two concepts).
+
+Throughout this thesis, we will write $\tau_1 + \cdots + \tau_n$ for the nested
+sum type $\tau_1 + (\tau_2 + (\cdots + (\tau_{n-1} + \tau_n) \cdots))$ and
+equivalently for product types $\tau_1 \times \cdots \times \tau_n$. Similarly,
+as is usual, we will let arrows associate to the right.
+
+\subsection{Type Rules for Expressions.}
+
+The typing rules for expressions are shown in Fig.~\ref{fig:exprType}. A
+combination of features of the typing rules enforces relevant typing:
+
+\begin{enumerate}
+
+  \item [(1)] \emph{Variable Typing Restriction:} The restriction on the
+    contents of the dynamic context during certain type rules.
+
+  \item [(2)] \emph{Dynamic Context Union:} A union operator for splitting the
+    dynamic contexts in most type rules with more than one premise.
+
+  \item [(3)] \emph{Context Update:} The assignment to the static context with
+    new information instead of the dynamic when the dynamic context is empty.
+
+\end{enumerate}
+
+The rules for application are split into three different rules, corresponding
+to application of dynamic parameters (\textsc{T-App1}), application of static
+parameters (\textsc{T-App2}), and type instantiation for polymorphic functions
+(\textsc{T-PApp}). Notice further the somewhat odd \textsc{T-Unit-Elm} rule.
+Since relevant type systems treat variables as resources that must be consumed,
+specific rules are required when data \emph{can} safely be discarded (such as
+the case for data of unit type). What this rule essentially states is that
+\emph{any} expression of unit type can be safely discarded; this is dual to the
+\textsc{T-Unit} rule, which states that the unique value $()$ of unit type can
+be freely produced (i.e.~in the empty context).
+
+\paragraph{Variable Typing Restriction}
+
+When applying certain axiomatic type rules (\textsc{T-Var1} and
+\textsc{T-Unit}), we require the dynamic context to be empty. This is necessary
+to inhibit unused parts of the dynamic context from being accidentally
+``spilled'' through the use of these rules. Simultaneously, we require that
+when we do use a variable from the dynamic context, the dynamic context
+contains exactly this variable and nothing else. This requirement prohibits
+the same sort of spilling.
+
+\paragraph{Dynamic Context Union}
+
+The union of the dynamic context is a method for splitting up the dynamic
+context into named parts, which can then be used separately in the premises of
+the rule. In logical derivations, splitting the known hypotheses is usually
+written as $\Gamma, \Gamma' \vdash \dots$, but we deliberately introduce a
+union operator to signify that we allow an overlap in the splitting of the
+hypotheses. Were we not to allow overlapping, typing would indeed be linear.
+For example, a possible split is:
+
+$$
+  \dfrac
+    {\begin{array}{ccc}
+        \overset{\vdots}{\emptyset; x \mapsto 1, y \mapsto 1 \vdashe \dots} &
+        \quad &
+        \overset{\vdots}{\emptyset; y \mapsto 1, z \mapsto 1 \vdashe \dots}
+     \end{array}}
+    {\emptyset; x \mapsto 1, y \mapsto 1, z \mapsto 1 \vdashe \dots}
+$$
+
+Here $y$ is part of the dynamic context in both premises.
+
+\paragraph{Context Update}
+
+We overload the rules for let and case-expressions depending on which context
+we are going to update with the variable assignments in these rules. This is
+motivated by what the form of the expression $e$ we are assigning to the
+variable names is. If the dynamic context is empty, $e$ is necessarily one of
+two things:
+
+\begin{enumerate}
+
+  \item [(1)] A closed term. A canonical value constructed by a closed term is
+    free as no information is consumed in its creation, allowing us to assign
+    it to the static context instead.
+
+  \item [(2)] An open term with free variables from the static context. Since
+    the static context may grow arbitrarily, and we have not consumed a dynamic
+    variable in $e$, no information is lost by assigning the resulting
+    canonical value to the static context instead.
+
+\end{enumerate}
+
+Therefore we bind variables introduced in let and case-expressions to the
+static context when the dynamic context is empty for the derivation of $e$. The
+three instances of overloaded rules can be seen by \textsc{T-Sum} versus
+\textsc{T-SumSt}, \textsc{T-Let1} versus \textsc{T-Let1St} and \textsc{T-Let2}
+versus \textsc{T-Let2St}.
+
+Alternatively we could have introduced a restricted notion of \emph{weakening}.
+Weakening is not regularly supported in linear or relevant logic systems as it
+is not resource sensitive. But relevant logic dictates that we must only not
+forget information before use, otherwise we may use it freely. With restricted
+weakening, we say that if we already know a variable from the static
+environment, we may freely forget it in the dynamic environment, as the
+information is not lost.
+
+This is more in line with expressing the idea that ancillae are static directly
+in a well typed program, as we explicitly require that each ancilla is built
+up again after we used it. However, it makes programs more long-winded. The
+proposed weakening rule is:
+
+\begin{align*}
+  \textsc{T-Weakening: }
+    \dfrac
+      {\Sigma, x \mapsto \tau; \Gamma, x \mapsto \tau \vdash e : \tau'}
+      {\Sigma, x \mapsto \tau; \Gamma \vdash e : \tau'}
+\end{align*}
+
+\begin{figure}[t!]
+
+\setlength\fboxsep{0.15cm}
+\noindent$\boxed{\text{Judgement: } \con e : \tau}$
+\begin{align*}
+  \textsc{T-Var1: }
+    \dfrac
+      {}
+      {\conemp x : \tau} \Sigma(x) = \tau &&
+  \textsc{T-Var2: }
+    \dfrac
+      {}
+      {\Sigma; (x \mapsto \tau) \vdashe x : \tau}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{T-Unit: }
+    \dfrac
+      {}
+      {\conemp () : 1} &&
+  \textsc{T-Unit-Elm: }
+    \dfrac
+      {\begin{array}{ccc}
+       \con e : 1 & \quad &
+       \conp e' : \tau
+       \end{array}}
+      {\concup e' : \tau}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{T-Inl: }
+    \dfrac
+      {\con e : \tau}
+      {\con \inl{e} : \tau + \tau'} &&
+  \textsc{T-Inr: }
+    \dfrac
+      {\con e : \tau}
+      {\con \inr{e} : \tau' + \tau}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{T-Prod: }
+    \dfrac
+      {\begin{array}{ccc}
+       \con e_1 : \tau & \quad &
+       \conp e_2 : \tau'
+       \end{array}}
+      {\concup (e_1, e_2) : \tau \times \tau'}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{T-App1: }
+    \dfrac
+      {\begin{array}{ccc}
+       \con f : \tau \leftrightarrow \tau' & \quad &
+       \conp e : \tau
+       \end{array}}
+      {\concup f~e : \tau'}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{T-App2: }
+    \dfrac
+      {\begin{array}{ccc}
+       \con f : \tau_a \rightarrow \tau_f & \quad &
+       \conemp e : \tau_a
+       \end{array}}
+      {\con f~e : \tau_f}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{T-PApp:}
+    \dfrac
+      {\con f : \forall \alpha.\tau_f}
+      {\con f~\tau_a : \tau_f[\tau_a/\alpha]} &&
+  \textsc{T-Let1: }
+    \dfrac
+      {\begin{array}{ccc}
+       \con e_1 : \tau' & \quad &
+       \Sigma; \Gamma', x : \tau' \vdashe e_2 : \tau
+       \end{array}}
+      {\concup \lett{x}{e_1}{e_2} : \tau}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{T-Let1St: }
+    \dfrac
+      {\begin{array}{ccc}
+       \Sigma; \emptyset \vdash e_1 : \tau' & \quad &
+       \Sigma, x : \tau' ; \Gamma, \vdashe e_2 : \tau
+       \end{array}}
+      {\con \lett{x}{e_1}{e_2} : \tau}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{T-Let2: }
+    \dfrac
+      {\begin{array}{ccc}
+       \con e_1 : \tau' \times \tau'' & \quad &
+       \Sigma; \Gamma', x : \tau', y : \tau'' \vdashe e_2 : \tau
+       \end{array}}
+      {\concup \lett{(x, y)}{e_1}{e_2} : \tau}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{T-Let2St: }
+    \dfrac
+      {\begin{array}{ccc}
+       \Sigma; \emptyset \vdash e_1 : \tau' \times \tau'' & \quad &
+       \Sigma, x : \tau', y : \tau''; \Gamma \vdashe e_2 : \tau
+       \end{array}}
+      {\con \lett{(x, y)}{e_1}{e_2} : \tau}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{T-Sum: }
+    \dfrac
+      {\begin{array}{ccccc}
+       \con e_1 : \tau' + \tau'' & \quad &
+       \Sigma; \Gamma', x : \tau' \vdashe e_2 : \tau & \quad &
+       \Sigma; \Gamma', y : \tau'' \vdashe e_3 : \tau
+       \end{array}}
+      {\concup \caseof{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3} : \tau}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{T-SumSt: }
+    \dfrac
+      {\begin{array}{ccccc}
+       \Sigma; \emptyset \vdash e_1 : \tau' + \tau'' & \quad &
+       \Sigma, x : \tau'; \Gamma \vdashe e_2 : \tau & \quad &
+       \Sigma, y : \tau''; \Gamma \vdashe e_3 : \tau
+       \end{array}}
+      {\con \caseof{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3} : \tau}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{T-Roll: }
+    \dfrac
+      {\con e : \tau' [\mu X . \tau' / X]}
+      {\con \roll{\mu X . \tau'}{e} : \mu X . \tau'} &&
+  \textsc{T-Unroll: }
+    \dfrac
+      {\con e : \mu X . \tau}
+      {\con \unroll{\mu X . \tau}{e} : \tau' [\mu X . \tau / X]}
+\end{align*}
+\caption{Expression typing.}\label{fig:exprType}
+\end{figure}
+
+\subsection{Type Rules For Function Declarations.}
+
+The type rules for function declarations are shown in Fig.~\ref{fig:funcType}.
+Here \textsc{T-PFun} generalizes the type arguments, next \textsc{T-Fun1}
+consumes the ancillary variables, and finally \textsc{T-Fun2} handles the last
+dynamic variable by applying the expression typing.
+
+\begin{figure}[t]
+\setlength\fboxsep{0.15cm}
+\noindent$\boxed{\text{Judgement: } \Sigma \vdashd d : \tau}$
+
+\begin{align*}
+  \textsc{T-Fun1: }
+    \dfrac
+      {\Sigma, x : \tau_a \vdashd f~v^+ = e : \tau_f}
+      {\Sigma \vdashd f~x{:}\tau_a\ v^+ = e : \tau_a \rightarrow \tau_f} &&
+  \textsc{T-Fun2: }
+    \dfrac
+      {\Sigma; (x \mapsto \tau) \vdashe e : \tau'}
+      {\Sigma \vdashd f~x{:}\tau = e : \tau \leftrightarrow \tau'}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{T-PFun:}
+    \dfrac
+      {\Sigma \vdashd f~\beta^*~v^+ = e : \tau_f}
+      {\Sigma \vdashd f~\alpha~\beta^*~v^+ = e : \forall \alpha.\tau_f} \alpha
+      \notin \text{TV}(\Sigma)
+\end{align*}
+
+\caption{Function typing.}\label{fig:funcType}
+\end{figure}
+
+We implicitly assume that pointers to all defined functions are placed in the
+static context $\Sigma$ as an initial step. For example, when typing an
+expression $e$ in a program where a function $f~x = e$ is defined, and we have
+been able to establish that $\Sigma \vdashd f~x = e : \tau \leftrightarrow
+\tau'$ for some types $\tau, \tau'$, we assume that a variable $f : \tau
+\leftrightarrow \tau'$ is placed in the static context in which we will type
+$e$ ahead of time. This initial step amounts to a typing rule for the full
+program.
+
+Note that we write two very similar application rules \textsc{T-App1} and
+\textsc{T-App2}. This discerns between function application of ancillary and
+dynamic data, corresponding to the two different arrow types. In particular, as
+shown in \textsc{T-App1}, application in the dynamic variable of a function is
+only possible when that function is of type $\tau \leftrightarrow \tau'$, where
+$\tau$ and $\tau'$ are non-arrow types: This specifically disallows
+higher-order functions. Also note that the dynamic context must be empty for
+application of the \textsc{T-App2} rule --- otherwise, it is treated as static
+in the evaluation of $f$, and we have no guarantee how it is used.
+
+\section{Recursive and Polymorphic Types}
+
+The type system of \rfunc supports both recursive types as well as rank-1
+parametrically polymorphic types. To support both of these, type variables,
+which serve as holes that may be plugged by other types, are used.
+
+For recursive types, we employ a standard treatment of iso-recursive types in
+which explicit \textbf{roll} and \textbf{unroll} constructs are added to
+witness the isomorphism between $\mu X. \tau$ and $\tau[\mu X. \tau/X]$ for a
+given type $\tau$ (which, naturally, may contain the type variable $X$). For a
+type $\tau$, we let $\text{TV}(\tau)$ denote the set of type variables that
+appear free in $\tau$. For example, the type of lists of a given type $\tau$
+can be expressed as the recursive type $\mu X. 1 + (\tau \times X)$, and
+$\text{TV}(1 + (\tau \times X)) = \{X\}$ when the type $\tau$ contains no free
+type variables. We define TV on contexts as $\text{TV}(\Sigma) = \{ v \in
+\text{TV}(\tau) \mid x : \tau \in \Sigma \}$.
+
+For polymorphism, we use an approach similar to System F, restricted to rank-1
+polymorphism. In a polymorphic type system with rank-1 polymorphism, type
+variables themselves cannot be instantiated with polymorphic types, but must be
+instantiated with concrete types instead. While this approach is significantly
+more restrictive than the full polymorphism of System F, it is expressive
+enough that many practical polymorphic functions may be expressed (e.g.  ML and
+Haskell both employ a form of rank-1 polymorphism based on the Hindley-Milner
+type system~\cite{Milner:1978}), while being simple enough that type inference
+is often both decidable and feasible in practice.
+
+\section{Operational Semantics}\label{sec:semantics}
+
+\begin{figure}[t]
+\begin{align*}
+  c ::= () \mid \inl{c} \mid \inr{c} \mid (c_1, c_2) \mid \roll{\tau}{c} \mid x
+\end{align*}
+\caption{Canonical forms.}\label{fig:canonical}
+\end{figure}
+
+We present a call-by-value big step operational semantics on expressions in
+Fig.~\ref{math:semantics}, with canonical forms shown in
+Fig.~\ref{fig:canonical}. As is customary with functional languages, we use
+substitution (defined as usual by structural induction on expressions) to
+associate free variables with values (canonical forms). Since the language does
+not allow for values of a function type, we instead use an environment $p$ of
+function definitions in order to perform computations in a context (such as a
+program) with all defined functions.
+
+\begin{figure}[ht]
+\setlength\fboxsep{0.15cm}
+\noindent$\boxed{\text{Judgement: } \pcon e \downarrow c}$
+
+\begin{align*}
+  \textsc{E-Unit: }
+    \dfrac
+      {}
+      {\pcon () \downarrow ()} &&
+  \textsc{E-Inl: }
+    \dfrac
+      {\pcon e \downarrow c}
+      {\pcon \textbf{inl}(e) \downarrow \textbf{inl}(c)} &&
+  \textsc{E-Inr: }
+    \dfrac
+      {\pcon e \downarrow c}
+      {\pcon  \textbf{inr}(e) \downarrow \textbf{inr}(c)}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{E-Roll: }
+    \dfrac
+      {\pcon e \downarrow c}
+      {\pcon \roll{\tau}{e} \downarrow \roll{\tau} c} &&
+  \textsc{E-Unroll: }
+    \dfrac
+      {\pcon e \downarrow \roll{\tau}{c}}
+      {\pcon \unroll{\tau}{e} \downarrow c}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{E-Prod: }
+    \dfrac
+      {\begin{array}{ccc}
+       \pcon e_1 \downarrow c_1 & \quad &
+       \pcon e_2 \downarrow c_2
+       \end{array}}
+      {\pcon (e_1, e_2) \downarrow (c_1, c_2)} &&
+  \textsc{E-Let: }
+    \dfrac
+      {\begin{array}{ccc}
+       \pcon e_1 \downarrow c_1 & \quad &
+       \pcon e_2[c_1/x] \downarrow c
+       \end{array}}
+      {\pcon \textbf{let $x = e_1$ in $e_2$} \downarrow c}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{E-LetP: }
+    \dfrac
+      {\begin{array}{ccc}
+       \pcon e_1 \downarrow (c_1,c_2) & \quad &
+       \pcon e_2[c_1 / x, c_2 / y] \downarrow c
+       \end{array}}
+      {\pcon \textbf{let $(x,y) = e_1$ in $e_2$} \downarrow c}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{E-CaseL: }
+    \dfrac
+      {\begin{array}{ccc}
+       \pcon e_1 \downarrow \inl{c_1} & \quad &
+       \pcon e_2 [c_1 / x] \downarrow c
+       \end{array}}
+      {\pcon \caseof{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3} \downarrow c}
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{E-CaseR: }
+    \dfrac
+      {\begin{array}{ccccc}
+       \pcon e_1 \downarrow \inr{c_1} & \quad &
+       \pcon e_3 [c_1 / y] \downarrow c & \quad &
+       %\pcon x \downarrow c'
+       \end{array}}
+      {\pcon \caseof{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3} \downarrow c}c \notin
+      \PLVal(e_2)% c \neq c'
+\end{align*}
+\alignspace
+\begin{align*}
+  \textsc{E-App: }
+    \dfrac
+      {\begin{array}{ccc}
+       \pcon e_1 \downarrow c_1 \cdots \pcon e_n \downarrow c_n & \quad &
+       \pcon e[c_1 / x_1,\ \cdots,\ c_n / x_n] \downarrow c
+       \end{array}}
+      {\pcon f\ \alpha_1 \cdots \alpha_m~e_1\ \cdots\ e_n \downarrow c}
+      p(f) = f\ \alpha_1 \cdots \alpha_m ~ x_1 \cdots x_n = e
+\end{align*}
+\caption{Big step semantics of \rfunc.}\label{math:semantics}
+\end{figure}
+
+A common problem in reversible programming is to ensure that branching of
+programs is done in such a way as to uniquely determine in the backward
+direction which branch was taken in the forward direction. Since
+case-expressions allow for such branching, we will need to define some rather
+complicated machinery of \emph{leaf expressions}, \emph{possible leaf values},
+and \emph{leaves} (the latter is similar to what is also used
+in~\cite{YokoyamaAxelsenGlueck:2012:LNCS}) in order to give their semantics.
+
+Say that an expression $e$ is a \emph{leaf expression} if it does not contain
+any subexpression (including itself) of the form $\textbf{let $l = e_1$ in
+$e_2$}$ or $\caseof{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3}$; the collection of leaf
+expressions form a set, $\text{LExpr}$. As the name suggests, a leaf expression
+is an expression that can be considered as a \emph{leaf} of another expression.
+The set of leaves of an expression $e$, denoted $\leaves(e)$, is defined in
+Fig.~\ref{fig:leaves}.
+
+\begin{figure}[tp]
+\begin{align*}
+  \leaves( () ) & = \left\{()\right\} \\
+  \leaves((e_1, e_2)) & = \{ (e_1',e_2') \mid e_1' \in \leaves(e_1), \\
+  & \phantom{= \{ (e_1',e_2') \mid}\ \ e_2' \in \leaves(e_2) \} \\
+  \leaves(\inl{e}) & = \left\{ \inl{e'} \mid e' \in \leaves(e) \right\}\\
+  \leaves(\inr{e}) & = \left\{ \inr{e'} \mid e' \in \leaves(e) \right\}\\
+  \leaves(\roll{\tau}{e}) & = \left\{ \roll{\tau}{e'} \mid e' \in \leaves(e)
+  \right\}\\
+  \leaves(\textbf{let $l = e_1$ in $e_2$}) & = \leaves(e_2) \\
+  \leaves(\caseof{e_1}{\inl{x}}{e_2}{\inr{y}}{e_3}) & = \leaves(e_2) \cup \leaves(e_3) \\
+  \leaves(x) & = \{x\} \\
+  \leaves(\unroll{\tau}{e}) & = \{\unroll{\tau}{e'} \mid e' \in \leaves(e) \}\\
+  \leaves(f~e_1~\dots~e_n) & = \{f~e_1'~\dots~e_n' \mid e_i' \in \leaves(e_i) \}
+\end{align*}
+\caption{Definition function that computes the leaves of a program.}
+\label{fig:leaves}
+\end{figure}
+
+The leaves of an expression are, in a sense, an abstract over-approximation of
+its possible values, save for the fact that leaves may be leaf expressions
+rather than mere canonical forms. We make this somewhat more concrete with the
+definition of the \emph{possible leaf values} of an expression $e$, defined as:
+
+\begin{align}
+  \PLVal(e) = \{ e' \in \text{LExpr} \mid e'' \in \leaves(e), e' \rhd e'' \}
+  \label{def:PLVal}
+\end{align}
+
+Where the relation $- \rhd -$ on leaf expressions is defined inductively as
+(the symmetric closure\footnote{The symmetric closure of a binary relation on
+a set is the smallest symmetric relation on that set which contains the
+relation.} of):
+
+\begin{align}
+  () & \rhd () \nonumber \\
+  (e_1, e_2) & \rhd (e_1', e_2')  & \text{if} \quad e_1 \rhd e_1'
+  \text{ and } e_2 \rhd e_2' \nonumber \\
+  \inl{e} & \rhd \inl{e'} & \text{if} \quad e \rhd e' \nonumber
+  \label{def:rhd_relation} \\
+  \inr{e} & \rhd \inr{e'} & \text{if} \quad e \rhd e' \\
+  \roll{\tau}{e} & \rhd \roll{\tau}{e'} & \text{if} \quad e \rhd e' \nonumber \\
+  e & \rhd x \nonumber \\
+  e & \rhd f~e_1~\dots~e_n \nonumber \\
+  e & \rhd \unroll{\tau}{e'} \nonumber
+\end{align}
+
+As such, the set $\PLVal(e)$ is the set of leaf expressions that can be
+unified, in a certain sense, with a leaf of $e$. Since variables, function
+applications, and unrolls do nothing to describe the syntactic form of possible
+results, we define that these may be unified with \emph{any} expression. As
+such, using $\PLVal(e)$ is somewhat conservative in that it may reject
+definitions that are in fact reversible. Note also that $\PLVal(e)$
+specifically includes all canonical forms that could be produced by $e$, since
+all canonical forms are leaf expressions as well.
+
+This way, if we can ensure that a canonical form $c$ produced by a branch in
+a case-expression could not possibly have been produced by a \emph{previous}
+branch in the case-expression, we know, in the backward direction, that $c$
+must have been produced by the current branch. This is precisely the reason for
+the side condition of $c \notin \PLVal(e_2)$ on \textsc{E-CaseR}, as this
+conservatively guarantees that $c$ could not have been produced by the previous
+branch.
+
+It should be noted that for iterated functions\footnote{An iterated function
+$f^n$ is a function $f$ composed with itself $n$ times.} this may add a
+multiplicative execution overhead that is equal to the size of the data
+structure. This effect has previously been shown in~\cite{Thomsen:2012:FDL},
+where a \lstinline{plus} function over Peano numbers, which was linear
+recursive over its input, actually had quadratic runtime.
+
+It is immediate that should the side condition not hold for an expression $e'$,
+no derivation is possible, and the expression does not evaluate to a value
+entirely. In Sect.~\ref{sec:staticFMP}, we will look at exactly under which
+conditions we can \emph{statically} guarantee that the side condition will hold
+for every possible value of a function's domain.
+
+We capture the conservative correctness of our definition of $\PLVal(e)$ with
+respect to the operational semantics --- i.e. the property that any
+canonical form $c$ arising from the evaluation of an expression $e$ will also
+be ``predicted'' by $\PLVal$ in the sense that $c \in \PLVal(e)$ --- in the
+following theorem:
+
+\begin{theorem}
+  If $p \vdash e \downarrow c$ then $c \in \PLVal(e)$.
+\end{theorem}
+
+\begin{proof}
+
+  By induction on the structure of the derivation of $p \vdash e \downarrow c$.
+  The proof is mostly straightforward: The case for \textsc{E-Unit} follows
+  trivially, as do the cases for \textsc{E-Unroll} and \textsc{E-App} since
+  leaves of $\unroll{\tau}{e}$ (respectively $f~e_1~\cdots~e_n$) are all of the
+  form $\unroll{\tau}{e'}$ (respectively $f~e_1'~\cdots~e_n'$), and since $e''
+  \rhd \unroll{\tau}{e'}$ (respectively $e'' \rhd f~e_1'~\cdots~e_n'$) for
+  \emph{any} choice of $e''$, it follows that $\PLVal(\unroll{\tau}{e'}) =
+  \PLVal(f~e_1~\cdots~e_n) = \text{LExpr}$. The cases for \textsc{E-Inl},
+  \textsc{E-Inr}, \textsc{E-Roll}, and \textsc{E-Prod} all follow
+  straightforwardly by induction, noting that $\PLVal(\inl{e}) = \{ \inl{e'}
+  \mid e' \in \PLVal(e) \}$, and similarly for $\inr{e}$, $(e_1,e_2)$, and
+  $\roll{\tau}{e}$. This leaves only the cases for \textbf{let} and
+  \textbf{case} expressions, which follow using Lemma~\ref{thm:plval_subs}.
+
+\end{proof}
+
+\begin{lemma}\label{thm:plval_subs}
+  For any expression $e$, variables $x_1, \dots, x_n$, and canonical forms
+  $c_1, \dots, c_n$, we have $\PLVal(e[c_1/x_1, \dots, c_n/x_n]) \subseteq
+  \PLVal(e)$.
+\end{lemma}
+
+\begin{proof}
+
+This lemma follows straightforwardly by structural induction on $e$, noting
+that it suffices to consider the case where $e$ is open with free variables
+$x_1, \dots, x_n$, as it holds trivially when $e$ is closed (or when its free
+variables are disjoint from $x_1, \dots, x_n$). With this lemma, showing the
+case for e.g. \textsc{E-Let} is straightforward since $c \in
+\PLVal(e_2[c_1/x])$ by induction, and since $\PLVal(e_2[c_1/x]) \subseteq
+\PLVal(e_2)$ by this lemma, so $c \in \PLVal(e_2) =
+\PLVal(\mathbf{let}~x=e_1~\mathbf{in}~e_2)$ by
+$\leaves(\mathbf{let}~x=e_1~\mathbf{in}~e_2) = \leaves(e_2)$.
+
+\end{proof}
+
+\section{Reversibility}
+
+Showing that the operational semantics are reversible amounts to showing that
+they exhibit both forward and backward determinism. Showing forward
+determinism is standard for any programming language (and holds
+straightforwardly in \rfunc as well), but backward determinism is unique to
+reversible programming languages. Before we proceed, we recall the usual
+terminology of \emph{open} and \emph{closed} expressions: Say that an
+expression $e$ is closed if it contains no free (unbound) variables, and open
+otherwise.
+
+Unlike imperative languages, where backward determinism is straightforwardly
+expressed as a property of the reduction relation $\sigma \vdash c \downarrow
+\sigma'$ where $\sigma$ is a store, backward determinism is somewhat more
+difficult to express for functional languages, as the obvious analogue --- that
+is, if $e \downarrow c$ and $e' \downarrow c$ then $e = e'$ --- is much too
+restrictive (specifically, it is obviously \emph{not} satisfied in all but the
+most trivial reversible functional languages). A more suitable notion turns out
+to be a \emph{contextual} one, where rather than considering the reduction
+behaviour of closed expressions in themselves, we consider the reduction
+behaviour of canonical forms in a given \emph{context} (in the form of an open
+expression) instead.
+
+{
+\renewcommand{\thetheorem}{\ref{thm:ctxbackwarddet}}
+\begin{theorem}[Contextual Backwards Determinism]
+
+  For all open expressions $e$ with free variables $x_1, \dots, x_n$, and all
+  canonical forms $v_1, \dots, v_n$ and $w_1, \dots, w_n$, if $\pcon e[v_1 /
+  x_1, \dots, v_n / x_n] \downarrow c$ and $\pcon e[w_1 / x_1, \dots, w_n /
+  x_n] \downarrow c$ then $v_i = w_i$  for all $1 \le i \le n$.
+
+\end{theorem}
+\addtocounter{theorem}{-1}
+}
+
+\begin{proof}
+
+The proof of this theorem follows by induction on the structure of $e$. For
+brevity, we sometimes denote the set $x_1, \dots, x_n$ as $X$. The proof is
+mostly straightforward:
+
+\begin{itemize}
+
+  \item Case $e = ()$. This follows immediately as there are no free variables
+    in $e$.
+
+  \item Case $e = x$. The only possible substitution is for the free variable
+    $x$, and the only possible inference rule is \textsc{E-Var}. We have $x[v /
+    x] \downarrow v$ and $x[w / x] \downarrow w$, so $v = w = c$.
+
+  \item Case $e = \inl{e'}$. Follows from using the Induction Hypothesis on
+    $e'$ and using the \textsc{E-Inl} rule to construct a derivation for $e$.
+    The proof is identical for when $e = \inr{e'}$, when $e = \roll{\tau}{e'}$
+    and when $e = \unroll{\tau}{e'}$.
+
+  \item Case $e = (e', e'')$. The only possible rule for the derivation is
+    \textsc{E-Prod}. First, we must consider which open terms occur in $e'$ and
+    $e''$ respectively. We have some subset $Y = y_1, \dots, y_k \in X$, of
+    open terms occurring in $e'$, and likewise, we have some subset $Z = z_1,
+    \dots, z_l \in X$ occurring $e''$, such that $Y \cup Z = X$. Note that any
+    $y_i$ or $z_i$ is simply an alias for some $x_j$, they are not fresh
+    variables. By the Induction Hypothesis on $e'$ and $e''$ we prove it for
+    both premises. Now, what about any $x_k \in Y \cap Z$? Any value $v_k$ has
+    not been proven to be the same as $w_k$, but it certainly has to hold. But
+    we have this by the inductive definition of substitution:
+
+    \begin{align*}
+      (e', e'') [c / x] = (e' [c / x], e'' [c / x])
+    \end{align*}
+
+  \item Case $e = \lett{x}{e'}{e''}$. We forego the argument about the
+    partitioning of open terms as in the case before, but take note that it
+    holds here as well. We first prove it for $e'$ by the Induction Hypothesis
+    on $e'$.
+
+    Now, we have by assumption that the expressions $(\lett{x}{e_1}{e_2})[v_1 /
+    x_1, \dots, v_n / x_n]$ and $(\lett{x}{e_1}{e_2})[w_1 / x_1, \dots, w_n /
+    x_n]$ evaluate to the same canonical value $c$. Thus the theorem holds for
+    the only free substitution (of $x$) in $e''$, and combined with the
+    Induction Hypothesis on $x_1, \dots, x_n$ it holds for $e$ as a whole.
+
+  % \item Case $e = f~\alpha_1 \dots \alpha_m~e_1 \dots e_q$. We have that $p(f)
+  %   = f~\alpha_1 \dots \alpha_m~y_1 \dots y_q = e'$. Straightforwardly by the
+  %   Induction Hypothesis on each expression $e_1, \dots, e_q$, we have that
+  %   $c_1' = c_1'', \dots, c_q' = c_q''$ where $e_k[v_1 / x_1, \dots, v_n / x_n]
+  %   \downarrow c_k'$ and $e_k[w_1 / x_1, \dots, w_n / x_n] \downarrow c_k''$
+  %   for $i \in 1 \dots q$. Now, by the Induction Hypothesis on $e'[c_1' / y_1,
+  %   \dots c_q' / y_q]$, we have what we want.
+
+  \item Case $e = f~\alpha_1 \dots \alpha_m~e_1 \dots e_q$. We have that $p(f)
+    = f~\alpha_1 \dots \alpha_m~y_1 \dots y_q = e'$. There are $q+1$ premises
+    and thus $q+1$ possible partitions of the open terms. Luckily, the theorem
+    holds by simply applying the Induction Hypothesis on the $q$ first
+    premises, followed by noticing that every other free variable in $e'$
+    (variables $y_1, \dots, y_q$) must be the substituted for the same set of
+    canonical values by the theorem assumption --- this paired with an
+    application of the Induction Hypothesis gives us what we want.
+
+  \item Case $e = \caseof{e'}{\inl{x}}{e''}{\inr{y}}{e'''}$. We may use two
+    inference rules, based on the derivation of $e'$. Induction on $e'$ derives
+    a value $c$ (where $e'$ contains some subset $Y = y_1, \dots, y_k \in X$ of
+    free variables). The possible forms of the value $c$ are:
+
+    \begin{itemize}
+
+      \item $c' = \inl{x}$. By the Induction Hypothesis on $e''$ with the
+        \textsc{E-CaseL} rule, we have what we want, with $e''$ evaluating to
+        some $c'$, where $e''$ contains some set of open terms $A \in X$.
+
+      \item $c' = \inr{y}$. By the Induction Hypothesis on $e'''$ with the
+        \textsc{E-CaseR} rule, we have that the theorem holds for $e'''$ with
+        open terms $B = a_1, \dots, a_l \in x_1, \dots, x_n$, such that $Y \cup
+        B = X$, where $e'''$ evaluates to some $c''$.
+
+        Both evaluation rules are over the same expression: This means the
+        expression contain the same set of open terms $Y$ in the first premise
+        and not necessarily the same set of open terms $A$ and $B$ in the
+        second premise. By the Induction Hypothesis on $e'''$ we have
+        contextual backwards determinism for the premise $e'''$, but there is
+        no way of guaranteeing that the substitutions of $A$ and $B$ are
+        equivalent, and they can both evaluate to the same closed term where
+        $c' = c''$.
+
+        At this point we invoke the side condition of \text{E-CaseR}, which
+        specifically states that should a derivation using the \textsc{E-CaseR}
+        inference rule be possible so that $c' = c''$, then the derivation of
+        $e''$ to $c'$ must not exist.
+
+    \end{itemize}
+
+\end{itemize}
+
+And we have covered all the cases.
+
+\end{proof}
+
+\begin{corollary}[Injectivity]
+  For all functions $f$ and canonical forms $v,w$, if $\pcon f~v \downarrow c$
+  and $\pcon f~w \downarrow c$ then $v = w$.
+\end{corollary}
+
+\begin{proof}
+  Let $e$ be the open expression $f~x$ (with free variable $x$). Since
+  $(f~x)[v/x] = f~v$ and $(f~x)[w/x] = f~w$, applying
+  Theorem~\ref{thm:ctxbackwarddet} on $e$ yields precisely that if $\pcon f~v
+  \downarrow c$ and $\pcon f~w \downarrow c$ then $v=w$.
+\end{proof}
+
+% \section{Type Soundness}
+%
+% \begin{itemize}
+%
+%   \item There are some standard exercises when presenting a type system over a
+%     language to show that it is \emph{sound}, meaning that it rejects ill-typed
+%     programs. This is often done by showing progress and preservation of a type
+%     system. The idea is due to~\cite{Wright:1994}.
+%
+%   \item Progress says that a derivation cannot be stuck, e.g.~any non-diverging
+%     computation will derive to some value eventually (it is safe.) It has to do
+%     with the semantics.
+%
+%   \item Preservation says that if a term evaluates to a value, then the type of
+%     of the term and the value are the same.
+%
+%   \item I could mention these, but with a big step evaluation strategy they are
+%     not very interesting properties, as computations are not really modeled
+%     (through a small-step semantic), we just expect expressions to evaluate to
+%     values and not get stuck.
+%
+% \end{itemize}
+%
+% \section{r-Turing Completeness}
+%
+% \begin{itemize}
+%
+%   \item Define a r-Turing machine.
+%
+%   \item Show how an r-Turing machine can be simulated in \rfunc.
+%
+% \end{itemize}
